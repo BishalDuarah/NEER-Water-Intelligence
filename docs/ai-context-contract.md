@@ -2,9 +2,11 @@
 
 > Phase 3-A defined the DESIGN contract; Phase 3-B1 implemented the data layer
 > (context/output schemas + `AIProvider` interface); Phase 3-B2 implemented the
-> concrete Gemini provider behind that interface. This document defines the
-> contract between the deterministic NEER intelligence core and the AI
-> explanation/recommendation layer, and records implementation status.
+> concrete Gemini provider behind that interface; Phase 3-B3 added the
+> orchestrator that gates AI consumption and safely falls back to a deterministic
+> analysis. This document defines the contract between the deterministic NEER
+> intelligence core and the AI explanation/recommendation layer, and records
+> implementation status.
 
 ## Implementation Status (Phase 3-B1)
 
@@ -74,8 +76,61 @@ Implemented in `backend/app/intelligence/gemini_provider.py` using the current
   no DB/FastAPI coupling. One opt-in live test (skipped unless
   `NEER_RUN_LIVE_GEMINI_TEST=1` and `GEMINI_API_KEY` are set) asserts structure
   and safety properties only.
-- Not implemented: fallback orchestration (Phase 3-B3), FastAPI routes, DB
-  models, frontend AI UI, any autonomous action.
+- Not implemented in 3-B2: fallback orchestration (Phase 3-B3), FastAPI
+  routes, DB models, frontend AI UI, any autonomous action.
+
+## Phase 3-B3 Implementation (AI Orchestration & Deterministic Fallback)
+
+Implemented in `backend/app/intelligence/ai_orchestrator.py` + exported from
+`backend/app/intelligence/__init__.py`:
+
+- `AIOrchestrator` — the single gate NEER uses to consume LLM output. A provider
+  can be injected directly (`provider=`, as in tests); otherwise one is built
+  lazily from `default_provider_factory` (default: the Phase 3-B2
+  `GeminiProvider`), so constructing the orchestrator never imports the SDK or
+  touches the network, and a missing `GEMINI_API_KEY` surfaces as a
+  deterministic `PROVIDER_UNAVAILABLE` fallback instead of an import error.
+- `AIOrchestrator.analyze(context)` — analyzes ONE `IncidentAIContext` exactly
+  once (no retry loops) and returns ONE `AnalysisResult`. Success returns the
+  provider's validated `AIIncidentAnalysis` unchanged (`source=AI`,
+  `ai_available=True`). Failures fall back deterministically.
+- `AnalysisResult` — `incident_id` (re-verified to match the context),
+  `source` (`AnalysisSource.AI | FALLBACK`), `analysis: AIIncidentAnalysis`,
+  `ai_available: bool`, and a safe, categorized `fallback_reason`
+  (`FallbackReason` enum) that never carries raw exception text.
+- Fallback mapping onto the 3-B1 error contract:
+  `ProviderUnavailableError → PROVIDER_UNAVAILABLE`,
+  `ProviderTimeoutError → PROVIDER_TIMEOUT`,
+  `MalformedAIResponseError → MALFORMED_RESPONSE`,
+  `AIValidationError → INVALID_RESPONSE`, any other `AIProviderError →
+  PROVIDER_ERROR`. Only `AIProviderError` subclasses trigger a fallback — an
+  unexpected programming error (e.g. a bug in a nonconforming provider)
+  propagates to the caller and is never hidden by an automatic fallback.
+- `build_fallback_analysis(context)` — a pure, deterministic fallback
+  `AIIncidentAnalysis` built ONLY from values already present in the context
+  (no clocks, no randomness, no network): direct-referencing summary (zone,
+  type title, severity, risk score), metric-by-metric evidence interpretation
+  (only actual contributing signals), per-type qualified cause + verify/inspect/
+  compare investigation actions, three advisory response options, explicit
+  uncertainty, and decision-support safety notes. Identical contexts produce
+  byte-identical output, and two different failure modes yield the same result.
+- `analyze_incident(incident, correlated_evidence=None, provider=None)` —
+  convenience wrapper equivalent to `AIOrchestrator(provider).analyze(build_ai_context(...))`.
+- Integrity guarantees: the deterministic `Incident`/context are never mutated;
+  the deterministic authoritative values (risk, severity, type, confidence,
+  evidence, timestamps, population) are never recomputed or overridden;
+  fallback logs carry only `reason=<category>` + `incident_id` (never exception
+  text, never secrets).
+- Tests — `backend/tests/test_ai_orchestrator.py` (62 tests): error mapping,
+  categorized/safe reasons, source attribution, AI-unchanged passthrough,
+  `incident_id` mismatch → `INVALID_RESPONSE`, unexpected-error propagation,
+  per-type fallback language, advisory-only framing, no autonomous wording,
+  determinism (incl. across failure modes), single-invocation/no-retry, context/
+  incident non-mutation, golden Zone B success + fallback, normal (no-incident)
+  scenario, and source-level guarantees (no DB/FastAPI/network/time/randomness
+  coupling in the orchestrator module).
+- Not implemented in 3-B3: FastAPI routes, DB models, frontend AI UI, any
+  autonomous action, any new provider.
 
 ## Purpose
 
@@ -86,7 +141,7 @@ assessment:
 ```
 Simulation → Anomaly Detection → Correlation → Incident Assessment
     → (deterministic Incident objects)
-    → AI layer: explanation, interpretation, recommendations  [Phase 3-B2]
+    → AI layer: explanation, interpretation, recommendations  [Phase 3-B2/3-B3]
     → operator
 ```
 
@@ -487,9 +542,16 @@ fallback analysis:
 
 - AI failure must **not** make the incident disappear.
 - The operator UI shows the incident regardless of AI health.
-- Future tests must cover: missing provider, timeout, malformed response,
-  quota/rate errors, and the deterministic incident surviving AI failure.
-- Not implemented yet; planned for Phase 3-B3 (fallback orchestration).
+- Tests cover: missing provider, timeout, malformed response, invalid output,
+  unexpected (non-`AIProviderError`) failures propagating, and the deterministic
+  incident surviving AI failure — all implemented in Phase 3-B3.
+- **Implemented in Phase 3-B3** (`ai_orchestrator.py`): `AIOrchestrator.analyze`
+  calls the provider ONCE, maps every `AIProviderError` subclass onto a safe
+  categorized `FallbackReason`, and surfaces `build_fallback_analysis(context)`
+  — a deterministic analysis built only from the context — so the incident and
+  its deterministic values remain available and unchanged on every AI failure
+  mode. Raw exception messages are never logged or returned; the fallback path
+  is pure and reproducible.
 
 ---
 
@@ -594,11 +656,11 @@ failure, malformed/invalid/mismatched responses, advisory enforcement — all
 network-free via an injected fake SDK client, plus an opt-in live Gemini test
 (`NEER_RUN_LIVE_GEMINI_TEST=1` + `GEMINI_API_KEY`). Fallback-behavior tests
 (missing provider, quota/rate, deterministic incident surviving AI failure)
-land with fallback orchestration in Phase 3-B3.
+land with fallback orchestration in Phase 3-B3 (`backend/tests/test_ai_orchestrator.py`).
 
 ---
 
-## Phase 3-A / 3-B1 / 3-B2 Scope Boundary
+## Phase 3-A / 3-B1 / 3-B2 / 3-B3 Scope Boundary
 
 Implemented in Phase 3-A:
 
@@ -620,15 +682,25 @@ Implemented in Phase 3-B2:
 - network-free provider tests (fake SDK client) + opt-in live Gemini test
 - `GEMINI_API_KEY` handling (never logged/committed; missing → unavailable)
 
-Not implemented (they land in Phase 3-B3 and later):
+Implemented in Phase 3-B3:
 
-- fallback orchestration behind the `AIProvider` contract
+- `ai_orchestrator.py`: `AIOrchestrator`, `AnalysisResult`, `AnalysisSource`,
+  `FallbackReason`, deterministic `build_fallback_analysis`, `analyze_incident`
+- single-attempt AI consumption gated behind the `AIProvider` contract, with
+  `AIProviderError` subclasses mapped onto categorized fallback reasons and
+  unexpected errors propagating
+- network-free orchestration/fallback tests (62) incl. golden Zone B and the
+  normal no-incident scenario
+
+Not implemented (Phase 4 / later phases):
+
 - any FastAPI route / operator workflow
 - PostgreSQL/persistence models
 - frontend AI components
+- any new AI provider
 - any modification of simulation / baseline / detector / correlation / incident
   engines, the 3-B1 context/analysis/interface modules, or existing tests
 
 The deterministic core remains locked, and the whole contract suite passes:
-**131 tests** (108 prior + 23 Phase 3-B2), with the live Gemini test opting in
-only via `NEER_RUN_LIVE_GEMINI_TEST=1` + `GEMINI_API_KEY`.
+**193 tests** (108 prior + 23 Phase 3-B2 + 62 Phase 3-B3), with the live Gemini
+test opting in only via `NEER_RUN_LIVE_GEMINI_TEST=1` + `GEMINI_API_KEY`.

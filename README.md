@@ -2,7 +2,7 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 3-B2 (Gemini Provider Integration)** —
+This repository is in **Phase 3-B3 (AI Orchestration & Fallback)** —
 the Phase 0 foundation (skeleton, database connection, health endpoint,
 frontend↔backend comms), the Phase 1 deterministic water-network data
 generator, a signal-level intelligence module that scores each measurement
@@ -14,7 +14,10 @@ actionable incidents with classification, severity, and confidence (Phase
 the `IncidentAIContext`, `AIIncidentAnalysis` schema, and `AIProvider`
 interface; Phase 3-B2 adds the concrete Gemini provider behind that interface
 (`gemini_provider.py`, `google-genai` SDK, structured output re-validated
-locally, opt-in live test). See
+locally, opt-in live test); Phase 3-B3 adds the orchestrator that gates AI
+consumption and fails safely onto a deterministic analysis
+(`ai_orchestrator.py`: `AIOrchestrator`, deterministic `build_fallback_analysis`).
+See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
 [`docs/correlation.md`](docs/correlation.md),
@@ -24,7 +27,7 @@ locally, opt-in live test). See
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 3-B2)
+## Architecture (Phase 3-B3)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -42,8 +45,12 @@ deterministic incident + risk engine (Phase 2C-B) that qualifies evidence
    concrete Gemini provider (`gemini_provider.py`) behind that interface —
    `google-genai` SDK, single structured-output call, deterministic
    `SYSTEM_INSTRUCTIONS`, local `AIIncidentAnalysis` re-validation, typed
-   `AIProviderError` mapping, and `GEMINI_API_KEY` from the environment. No
-   fallback orchestration, routes, or persistence yet.
+   `AIProviderError` mapping, and `GEMINI_API_KEY` from the environment.
+   Phase 3-B3 adds the orchestration gate (`ai_orchestrator.py`): one provider
+   attempt per incident via `AIOrchestrator.analyze`, and any `AIProviderError`
+   falls back to the deterministic `build_fallback_analysis` (safe categorized
+   `fallback_reason`, incident preserved, no retries). No routes, persistence,
+   or frontend AI UI yet.
 
 ```
 backend/   FastAPI app, config, db session, /health, tests
@@ -52,7 +59,8 @@ app/simulation/    data generator (Phase 1)
            app/intelligence/  baselines + anomaly detection (2A), correlation (2B),
                                incident + risk assessment (2C-B),
                                AI context/output models + provider interface (3-B1),
-                               Gemini provider integration (3-B2)
+                               Gemini provider integration (3-B2),
+                               orchestration + deterministic fallback (3-B3)
 frontend/  React app, API client, status view
 docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md,
            ai-context-contract.md
@@ -192,6 +200,35 @@ analysis = provider.generate_analysis(build_ai_context(incident))
 print(analysis.incident_id, analysis.summary[:80])
 ```
 
+### 9. AI orchestration with deterministic fallback (Phase 3-B3)
+
+`AIOrchestrator` is the single gate for AI consumption: one provider attempt
+per incident; on any provider failure NEER still returns a deterministic
+fallback analysis built from the context. It also works without
+`GEMINI_API_KEY`:
+
+```python
+from app.simulation import build_config, run_simulation
+from app.intelligence import (
+    AIOrchestrator, build_ai_context, assess_groups,
+    correlate_evidence, detect_anomalies,
+)
+
+reference = run_simulation(build_config(seed=99, duration_hours=7 * 24.0)).measurements
+target = run_simulation(build_config(seed=42, scenario_ids=("ZONE_B_SUPPLY_INCIDENT",)))
+incident = next(
+    a.incident for a in assess_groups(
+        correlate_evidence(detect_anomalies(reference, target.measurements), target.reports),
+        target.zones,
+    )
+    if a.qualified and a.incident is not None
+)
+
+result = AIOrchestrator().analyze(build_ai_context(incident))
+print(result.source.value)      # "AI" (Gemini) or "FALLBACK" (deterministic)
+print(result.analysis.summary)  # always a valid AIIncidentAnalysis
+```
+
 ## Verify
 
 - `GET http://localhost:8000/health` → `{"status":"ok"}`
@@ -203,13 +240,16 @@ print(analysis.incident_id, analysis.summary[:80])
 ## What is NOT implemented yet
 
 Incident lifecycle management / operator workflows, FastAPI routes / PostgreSQL
-persistence for intelligence findings, provider fallback orchestration (Phase
-3-B3), and the full dashboard are designed but not implemented. Incident
-generation, classification, risk scoring, severity, and confidence are
-implemented deterministically in Phase 2C-B (`backend/app/intelligence/incident.py`,
-tested in `backend/tests/test_incident_risk.py`); the AI context/output schemas
-and provider interface are implemented in Phase 3-B1 (`ai_context.py`,
+persistence for intelligence findings, and the full dashboard are designed but
+not implemented. Incident generation, classification, risk scoring, severity,
+and confidence are implemented deterministically in Phase 2C-B
+(`backend/app/intelligence/incident.py`, tested in
+`backend/tests/test_incident_risk.py`); the AI context/output schemas and
+provider interface are implemented in Phase 3-B1 (`ai_context.py`,
 `ai_analysis.py`, `ai_provider.py`, tested in
-`backend/tests/test_ai_context_contract.py`), and the concrete Gemini provider
-in Phase 3-B2 (`gemini_provider.py`, network-free fake-client tests in
-`backend/tests/test_gemini_provider.py` plus an opt-in live Gemini test).
+`backend/tests/test_ai_context_contract.py`); the concrete Gemini provider in
+Phase 3-B2 (`gemini_provider.py`, network-free fake-client tests in
+`backend/tests/test_gemini_provider.py` plus an opt-in live Gemini test); and
+the orchestrator + deterministic fallback in Phase 3-B3 (`ai_orchestrator.py`,
+tested in `backend/tests/test_ai_orchestrator.py`). Full regression:
+**193 passed, 1 skipped**.

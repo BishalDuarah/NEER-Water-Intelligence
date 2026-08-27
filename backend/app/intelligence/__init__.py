@@ -1,7 +1,8 @@
-"""NEER Water Intelligence - Phase 2A/2B: baseline, anomaly detection, correlation.
+"""NEER Water Intelligence - Phases 2A/2B/2C-B: baseline, anomaly detection,
+correlation, and deterministic incident + risk assessment.
 
-Signal-level intelligence and evidence correlation only. Incident generation,
-risk scoring, classification, and the AI layer are later phases and are NOT
+Signal-level intelligence, evidence correlation, and incident assessment are
+all deterministic and free of any LLM. The AI layer is a later phase and is NOT
 here.
 """
 
@@ -29,6 +30,24 @@ from app.intelligence.detector import (
     DetectorConfig,
     detect_anomalies,
 )
+from app.intelligence.incident import (
+    Incident,
+    IncidentAssessment,
+    IncidentAssessor,
+    IncidentConfig,
+    IncidentStatus,
+    IncidentType,
+    RiskFactors,
+    SeverityLabel,
+    assess_group,
+    assess_groups,
+    classification_reason,
+    classify_incident,
+    compute_confidence,
+    compute_risk_factors,
+    compute_risk_score,
+    severity_from_risk,
+)
 
 __all__ = [
     "STATUS_ANOMALOUS",
@@ -44,9 +63,25 @@ __all__ = [
     "CorrelationResult",
     "CorrelatedEvidenceGroup",
     "DetectorConfig",
+    "Incident",
+    "IncidentAssessment",
+    "IncidentAssessor",
+    "IncidentConfig",
+    "IncidentStatus",
+    "IncidentType",
+    "RiskFactors",
+    "SeverityLabel",
+    "assess_group",
+    "assess_groups",
     "build_baseline",
     "bucket_label",
     "bucket_of",
+    "classification_reason",
+    "classify_incident",
+    "compute_confidence",
+    "compute_risk_factors",
+    "compute_risk_score",
     "correlate_evidence",
     "detect_anomalies",
+    "severity_from_risk",
 ]

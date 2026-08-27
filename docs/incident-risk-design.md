@@ -1,8 +1,8 @@
 # Incident & Risk Design
 
-> Phase 2C-A — DESIGN contract. This document specifies the Phase 2C
-> architecture. It is not an implementation. Incident and risk code ships in
-> Phase 2C-B against this contract.
+> Phase 2C-A established the DESIGN contract; the contract was implemented and
+> calibrated in Phase 2C-B (`backend/app/intelligence/incident.py`).
+> This document records both the contract and its implementation.
 
 ## Purpose
 
@@ -74,7 +74,8 @@ Proposed incident structure (design contract only; implementation in Phase
 | `evidence`                   | the originating `CorrelatedEvidenceGroup`       |
 | `explanation` / `reason`     | deterministic, human-readable reasoning chain    |
 
-This is a **contract**, not code. Fields will be finalized during Phase 2C-B.
+This is the contract that Phase 2C-B implemented (`Incident`, `RiskFactors`,
+`IncidentAssessment`, `IncidentAssessor`; see the Implementation section).
 
 ## Incident Types
 
@@ -141,9 +142,9 @@ evidence_score >= 0.50  →  candidate / actionable incident
 
 This threshold is **explicitly provisional**:
 
-- it lives in `CorrelationConfig`-style configuration;
-- it is subject to calibration against normal, golden, and borderline
-  scenarios during Phase 2C-B;
+- it lives in `IncidentConfig`-style configuration (`qualification_threshold`);
+- it was calibrated against normal, golden, and borderline scenarios during
+  Phase 2C-B and **retained at 0.50** for the MVP;
 - **0.50 is not presented as a scientifically established universal
   threshold.** It is a starting point to be tuned with measured data.
 
@@ -253,11 +254,12 @@ directions are, how complete the evidence is (multiple metrics corroborating
 one expected pattern, reports consistent with the type), and how stable the
 assessment is over time.
 
-The exact formula is **deferred to Phase 2C-B**, where it can be finalized
-after examining the available evidence fields and calibrating against the
-scenario set. This document only fixes the semantic contract: confidence
-measures assessability/reliability, separately from how big the consequence
-might be (risk) and how strong the correlation is (evidence).
+The exact formula was **finalized in Phase 2C-B** (see Confidence in the
+Implementation section) after examining the available evidence fields and
+calibrating against the scenario set. This document fixes the semantic
+contract: confidence measures assessability/reliability, separately from how
+big the consequence might be (risk) and how strong the correlation is
+(evidence).
 
 ## Golden Zone B Assessment
 
@@ -291,7 +293,8 @@ Mapping notes:
 - The evidence score is *not* translated into a confidence percentage; the
   two are defined separately above.
 - No final risk score or severity is invented here — values come from
-  implementation + calibration in Phase 2C-B.
+  implementation + calibration in Phase 2C-B (see the Implementation section
+  for the measured golden outcome).
 
 ## Normal Scenario
 
@@ -367,3 +370,147 @@ The AI **must not**:
   added for calibration).
 - Correlation does **not** prove physical causality; "consistent with a
   potential event" is the honest ceiling of the deterministic layer.
+
+## Implementation (Phase 2C-B)
+
+Live code: `backend/app/intelligence/incident.py` (exported through
+`backend/app/intelligence/__init__.py`). Consumes Phase 2B evidence directly;
+module-scope helper wrappers `assess_group` / `assess_groups` pair an
+`Incident` with its `IncidentAssessment` (qualification verdict + reason + the
+assembled incident).
+
+### Pipeline position
+
+```
+Simulation → Anomaly Detection → Correlated Evidence
+    → assess_groups(groups, zones)
+        → qualification → classification → risk factors → risk → severity → confidence
+    → IncidentAssessment tuple (0..n qualified incidents)
+        → AI-assisted explanation / recommendation (later)
+```
+
+### Determinism
+
+- No clocks in the engine. `last_updated` = `group.end_time`; `start_time` =
+  `group.start_time`.
+- `incident_id = "INC-{zone_id}-{start_time:%Y%m%dT%H%M%SZ}"` — stable,
+  reproducible.
+- `assess_many` sorts by `(start_time, zone_id, group_id)` so identical input
+  (any order) yields an identical tuple; every object is a frozen dataclass.
+- New incidents always begin in `status = DETECTED` (lifecycle advances are an
+  operator/actor concern; the engine never mutates state on its own).
+
+### Qualification
+
+```
+qualified = isfinite(evidence_score) and evidence_score >= qualification_threshold
+```
+
+- `qualification_threshold = 0.50` (configurable in `IncidentConfig`).
+- Below-threshold or non-finite evidence → `qualified = False`, `incident =
+  None`, and the reason states "does not exceed evidence threshold <X>".
+- This is a **candidate**, not a mandate: severity/risk are advisory labels.
+
+### Classification (deterministic, scenario-agnostic)
+
+First matching rule wins; mean signed z per metric is compared against
+`classification_z_threshold = 3.0`. The engine never inspects scenario names
+(verified by tests) and reports qualified direction language only:
+
+| incident_type      | signature (mean z vs +3 / −3)                            |
+| ------------------ | -------------------------------------------------------- |
+| `WATER_LOSS`       | pressure below AND flow above AND consumption below      |
+| `SUPPLY_DISRUPTION`| consumption below AND (flow below OR a `supply_disruption` citizen report) |
+| `PRESSURE_ANOMALY` | only `pressure` deviates (either direction)              |
+| `WATER_QUALITY`    | only `quality` deviates (either direction)               |
+| `UNKNOWN`          | any other deviation pattern / no deviation               |
+
+`classification_reason` uses qualified wording, e.g. *"sustained low pressure,
+above-expectation flow, and below-expectation consumption in zone B are
+consistent with a potential water-loss event."* The engine never claims proven
+physical failure. `classification_support` = fraction of contributing
+anomalies whose metric/direction match the type signature (0 for `UNKNOWN`).
+
+### Risk factors (each in `[0, 1]`, independently testable)
+
+| factor             | computation (configurable bounds)                        |
+| ------------------ | -------------------------------------------------------- |
+| evidence_strength  | `clamp01(evidence_score)`                                |
+| anomaly_severity   | `clamp01(mean_abs_z / 12)`                               |
+| persistence        | `clamp01(persistence_minutes / 360)`                     |
+| impact             | `clamp01(population / 50_000)`, fallback **0.5** when population missing |
+| citizen_context    | `min(1, reports/10) × (0.5 + 0.5 × max_report_severity)`; severity weights low 0.4 / moderate 0.7 / high 1.0, unknown fallback 0.6 |
+
+### Risk formula (in code, documented, never LLM-derived)
+
+```
+risk_normalized =
+    0.30 × evidence_strength
+  + 0.20 × anomaly_severity
+  + 0.20 × persistence
+  + 0.20 × impact
+  + 0.10 × citizen_context
+
+risk_score = round(100 × risk_normalized, 2)   # bounded [0, 100]
+```
+
+Weights sum to 1; `IncidentConfig` validates weight length/sum ≥ 0, severity
+band ordering, and the citizen-severity mapping.
+
+### Severity bands
+
+`severity_from_risk` maps `risk_score` through configurable thresholds
+(default `(25, 50, 75)`):
+
+| risk_score | severity   | operator intent     |
+| ---------- | ---------- | ------------------- |
+| 0–24       | LOW        | monitor             |
+| 25–49      | MEDIUM     | investigate         |
+| 50–74      | HIGH       | prioritize response |
+| 75–100     | CRITICAL   | immediate escalation |
+
+### Confidence (reliability of the assessment, distinct from risk & evidence)
+
+```
+confidence =
+    0.40 × evidence_score
+  + 0.25 × signal_diversity
+  + 0.15 × temporal_coherence
+  + 0.20 × classification_support
+```
+
+- Rises with stronger, more diverse, more complete evidence; falls when
+  evidence is ambiguous (`UNKNOWN` → support 0).
+- Not a calibrated probability; it measures how assessable the evidence is.
+
+### Golden Zone B measured outcome (seed 42, ref seed 99)
+
+Exactly **one** incident qualifies (zone B):
+
+- type `WATER_LOSS`, status DETECTED, population 32 000
+- risk_score ≈ **91.52** → **CRITICAL**
+- confidence ≈ **0.9918**
+- factors ≈ (evidence 0.985, severity 1.0, persistence 0.958, impact 0.64,
+  citizen 1.0)
+- All other golden groups and **all normal-scenario groups** (seed 100, max
+  evidence 0.365) are rejected → zero incidents in a healthy network.
+
+### Field notes / edge behavior
+
+- `estimated_affected_population` is `Zone.estimated_population` or `None`
+  when the zone is unknown / zones skipped; missing data never crashes and
+  falls back to the documented neutral impact factor.
+- Groups with no anomalies or missing/non-finite anomaly z-scores degrade
+  factors safely (`severity 0.0`, `UNKNOWN`) and remain fully explainable.
+- These values are **simulated/estimated and calibrated**, not authoritative
+  real-world risk figures.
+
+### Tests
+
+`backend/tests/test_incident_risk.py` — 33 tests covering the model, the
+qualification threshold and its configurability, all five classification
+routes and scenario-name independence, population/missing-population handling,
+each factor normalization, the exact risk formula and weight validation,
+0–100 bounding, severity boundaries, confidence semantics, explainability,
+the golden / normal / zone-isolation pipelines, determinism, empty and
+malformed input, and the architectural guards (no LLM/API, no FastAPI/db).

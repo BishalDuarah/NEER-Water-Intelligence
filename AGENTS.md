@@ -26,26 +26,29 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 2C-A — Incident & Risk Design
+## Current Development Phase: Phase 2C-B — Incident Generation & Risk Assessment
 
-Design/documentation phase. Phases 1, 2A, and 2B are complete and locked:
-simulation (`docs/simulation.md`), baseline + anomaly detection
-(`docs/anomaly_detection.md`), and correlation (`docs/correlation.md`,
-`backend/app/intelligence/correlation.py`). The Phase 2C design contract is
-documented in `docs/incident-risk-design.md`: correlated evidence groups
-become actionable incident objects with deterministic classification, risk,
-severity, and confidence.
+Incident + risk engine implemented against the Phase 2C-A design contract.
+Phases 1, 2A, 2B, and 2C-A are complete and locked: simulation
+(`docs/simulation.md`), baseline + anomaly detection (`docs/anomaly_detection.md`),
+correlation (`docs/correlation.md`, `backend/app/intelligence/correlation.py`),
+and the design contract (`docs/incident-risk-design.md`). Phase 2C-B adds
+`backend/app/intelligence/incident.py` (deterministic qualification,
+classification, risk, severity, confidence) plus tests and docs; the design
+document now records the implementation and measured calibration.
 
-THIS PHASE IS DESIGN/DOCUMENTATION ONLY:
+THIS PHASE IS CHECKPOINTED (2C-B):
 
-- no incident implementation yet
-- no risk implementation yet
-- no AI integration yet
+- determinisitic incident generation + risk assessment are implemented;
+- no AI/LLM integration yet;
+- no FastAPI routes, database models, incident persistence, or frontend
+  incident UI yet.
 
 Do not modify `backend/app/simulation/`, `backend/app/intelligence/baseline.py`,
-`detector.py`, `correlation.py`, or existing tests. Do not create incident/risk
-modules, FastAPI routes, database models, or frontend code. Next phase is
-Phase 2C-B (implement the incident + risk engine against this contract).
+`detector.py`, `correlation.py`, or existing tests. Do not add LLM/Gemini
+integration, route handlers, DB models, or frontend code yet. Next phase is
+Phase 3 (AI-assisted incident explanation + recommendations) and operator
+workflow wiring for the end-to-end demo.
 
 ## Demo that must work end-to-end (priority over extras)
 

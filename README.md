@@ -2,13 +2,15 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 2C-A (Incident & Risk Design)** — the Phase 0
-foundation (skeleton, database connection, health endpoint, frontend↔backend
-comms), the Phase 1 deterministic water-network data generator, a signal-level
-intelligence module that scores each measurement against a time-of-day baseline
-(Phase 2A), a correlation engine that groups same-zone anomalies + citizen
-reports into scored evidence groups (Phase 2B), and a design contract for
-deterministic incident classification + risk (Phase 2C-A). See
+This repository is in **Phase 2C-B (Incident Generation & Risk Assessment)** —
+the Phase 0 foundation (skeleton, database connection, health endpoint,
+frontend↔backend comms), the Phase 1 deterministic water-network data
+generator, a signal-level intelligence module that scores each measurement
+against a time-of-day baseline (Phase 2A), a correlation engine that groups
+same-zone anomalies + citizen reports into scored evidence groups (Phase 2B),
+and a deterministic incident + risk engine that turns strong evidence into
+actionable incidents with classification, severity, and confidence (Phase
+2C-B). See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
 [`docs/correlation.md`](docs/correlation.md) and
@@ -17,7 +19,7 @@ deterministic incident classification + risk (Phase 2C-A). See
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 2C-A)
+## Architecture (Phase 2C-B)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -25,16 +27,18 @@ this project.
 - **Simulation**: `backend/app/simulation/` — deterministic, DB/FastAPI-independent
   data generator (zones, normal measurements, incident scenarios, citizen reports)
 - **Intelligence**: `backend/app/intelligence/` — time-of-day baselines +
-  bidirectional z-score anomaly detection (Phase 2A) + gap-based correlation of
-  anomalies + citizen reports into evidence groups with a transparent evidence
-  score (Phase 2B). Signal/evidence level only — no incidents, risk, or LLM yet
-  (incident + risk are designed but not implemented).
+  bidirectional z-score anomaly detection (Phase 2A), gap-based correlation of
+  anomalies + citizen reports into scored evidence groups (Phase 2B), and a
+  deterministic incident + risk engine (Phase 2C-B) that qualifies evidence
+  groups and produces `IncidentAssessment` objects (classification, risk,
+  severity, confidence). No AI/LLM layer yet.
 
 ```
 backend/   FastAPI app, config, db session, /health, tests
 
            app/simulation/    data generator (Phase 1)
-           app/intelligence/  baselines + anomaly detection (2A), correlation (2B)
+           app/intelligence/  baselines + anomaly detection (2A), correlation (2B),
+                              incident + risk assessment (2C-B)
 frontend/  React app, API client, status view
 docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md
 docker-compose.yml  PostgreSQL service
@@ -118,6 +122,27 @@ for group in result.groups:
     print(group.group_id, group.evidence_score, group.summary)
 ```
 
+### 7. Incident generation + risk assessment (Phase 2C-B)
+
+```python
+from app.simulation import build_config, run_simulation
+from app.intelligence import assess_groups, correlate_evidence, detect_anomalies
+
+reference = run_simulation(build_config(seed=99, duration_hours=7 * 24.0)).measurements
+target = run_simulation(build_config(seed=42, scenario_ids=("ZONE_B_SUPPLY_INCIDENT",)))
+result = correlate_evidence(detect_anomalies(reference, target.measurements), target.reports)
+
+for assessment in assess_groups(result.groups, target.zones):
+    if not assessment.qualified:
+        continue
+    incident = assessment.incident
+    print(incident.incident_id, incident.incident_type.value, incident.severity.value,
+          incident.risk_score, round(incident.confidence, 3))
+```
+
+Expected golden output: one qualified Zone B incident
+(`WATER_LOSS` / `CRITICAL`, risk ≈ 91.5, confidence ≈ 0.99).
+
 ## Verify
 
 - `GET http://localhost:8000/health` → `{"status":"ok"}`
@@ -128,8 +153,10 @@ for group in result.groups:
 
 ## What is NOT implemented yet
 
-Incident generation, incident classification, risk scoring,
-incident management, the AI/LLM layer, FastAPI routes / PostgreSQL persistence
-for intelligence findings, and the full dashboard are designed but not
-implemented. The Phase 2C incident + risk engine is contractually specified in
-`docs/incident-risk-design.md` and ships in Phase 2C-B.
+The AI/LLM explanation + recommendation layer, incident lifecycle
+management/operator workflows, FastAPI routes / PostgreSQL persistence for
+intelligence findings, and the full dashboard are designed but not
+implemented. Incident generation, classification, risk scoring, severity, and
+confidence are implemented deterministically in Phase 2C-B
+(`backend/app/intelligence/incident.py`, tested in
+`backend/tests/test_incident_risk.py`).

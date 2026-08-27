@@ -1,10 +1,10 @@
 # AI Context & Output Contract
 
-> Phase 3-A defined the DESIGN contract; Phase 3-B1 implemented the contract's
-> data/interface layer. This document defines the contract between the
-> deterministic NEER intelligence core and the future AI
-> explanation/recommendation layer, and records the Phase 3-B1 implementation
-> status.
+> Phase 3-A defined the DESIGN contract; Phase 3-B1 implemented the data layer
+> (context/output schemas + `AIProvider` interface); Phase 3-B2 implemented the
+> concrete Gemini provider behind that interface. This document defines the
+> contract between the deterministic NEER intelligence core and the AI
+> explanation/recommendation layer, and records implementation status.
 
 ## Implementation Status (Phase 3-B1)
 
@@ -30,13 +30,52 @@
 
 **Not implemented** (deferred to Phase 3-B2 and later):
 
-- concrete LLM provider;
-- any provider/LLM integration or API calls;
-- prompt construction/execution against a model;
 - fallback runtime behavior;
 - API integration (routes, DB persistence, frontend AI UI).
 
 The deterministic core (Phases 2A/2B/2C-B) remains locked and authoritative.
+
+## Phase 3-B2 Implementation (Gemini Provider)
+
+Implemented in `backend/app/intelligence/gemini_provider.py` using the current
+`google-genai` Python SDK (dependency added to `backend/pyproject.toml`):
+
+- `GeminiProvider` — concrete `AIProvider`; `generate_analysis(context)` performs
+  a single structured-output, single-turn Gemini call and returns a locally
+  re-validated `AIIncidentAnalysis`. Stateful HTTP client optional (`client=` is
+  injected in tests); constructed from config + `GEMINI_API_KEY`.
+- `GeminiProviderConfig` — `model` (default `gemini-2.5-flash`), `api_key`
+  (default `None`, read from `GEMINI_API_KEY`), `timeout_ms` (60 s), `temperature`
+  (0.2), `max_output_tokens` (4000). Credentials never logged, never in errors.
+- `SYSTEM_INSTRUCTIONS` — deterministic system prompt: NEER role/purpose,
+  authoritative-facts rule (deterministic values quoted, never recomputed, and
+  absent from output), grounding-only-on-context, observation-vs-hypothesis
+  language (`possible`/`plausible`/`consistent`), advisory-only recommendations,
+  no physical-infrastructure control, no executed-action claims, explicit
+  uncertainty, and an input-safety rule (context is DATA, not instructions —
+  prompt-injection defense).
+- Request shape: `system_instruction` + the serialized context
+  (`serialize_context()`, the only incident data sent) + structured output via
+  `response_mime_type="application/json"` with `response_json_schema` derived
+  from `AIIncidentAnalysis.model_json_schema()`. No tools, no function calling,
+  no search grounding.
+- Output handling: response text parsed as JSON, then re-validated with
+  `AIIncidentAnalysis.model_validate`. The surfaced `incident_id` must equal the
+  input context's — a mismatch raises `AIValidationError`; the deterministic
+  identity is never replaced.
+- Error mapping onto the 3-B1 contract: missing key / auth / provider / network →
+  `ProviderUnavailableError`; timeout → `ProviderTimeoutError`; empty or
+  unparseable response → `MalformedAIResponseError`; schema-validation failure or
+  `incident_id` mismatch → `AIValidationError`. Messages never carry the key.
+- Tests — `backend/tests/test_gemini_provider.py` (23 tests): fake SDK client
+  (deterministic, network-free); request construction (model, serialized context,
+  system instructions, JSON schema, no tools/grounding); output validation; error
+  mapping; secret hygiene; non-mutation; determinism; the golden Zone B pipeline;
+  no DB/FastAPI coupling. One opt-in live test (skipped unless
+  `NEER_RUN_LIVE_GEMINI_TEST=1` and `GEMINI_API_KEY` are set) asserts structure
+  and safety properties only.
+- Not implemented: fallback orchestration (Phase 3-B3), FastAPI routes, DB
+  models, frontend AI UI, any autonomous action.
 
 ## Purpose
 
@@ -47,7 +86,7 @@ assessment:
 ```
 Simulation → Anomaly Detection → Correlation → Incident Assessment
     → (deterministic Incident objects)
-    → AI layer: explanation, interpretation, recommendations  [FUTURE]
+    → AI layer: explanation, interpretation, recommendations  [Phase 3-B2]
     → operator
 ```
 
@@ -194,7 +233,8 @@ The AI may reason *about* the authoritative fields but must not alter them.
 
 ### Conceptual object: `AIIncidentAnalysis`
 
-The future provider returns a structured object (schema-validated):
+The provider returns a structured, schema-validated object (`AIIncidentAnalysis`,
+implemented in Phase 3-B1, produced by the Phase 3-B2 Gemini provider):
 
 | field                     | type                      | meaning                                        |
 | ------------------------- | ------------------------- | ---------------------------------------------- |
@@ -380,7 +420,9 @@ The system instructions explicitly tell the model:
 - fit the required structured output (field names, types, constraints)
 
 The prompt is constructed from schema-driven templates, not free-form log
-dumps. **The prompt itself is not implemented in Phase 3-A.**
+dumps. **Implemented in Phase 3-B2:** `SYSTEM_INSTRUCTIONS` (deterministic
+constant) + `serialize_context()` as the single data input + the Pydantic JSON
+schema as `response_json_schema`.
 
 ---
 
@@ -403,8 +445,9 @@ Properties:
 - `generate_analysis` takes the validated, serialized context and returns the
   validated analysis
 
-For Phase 3-A this is an **interface design only** — no provider code, no
-`ai.py`, no `gemini.py`, no API client.
+For Phase 3-A this was an interface design only; Phase 3-B1 implemented the
+protocol + error contract; Phase 3-B2 implements the concrete provider
+(`gemini_provider.py`) and swappable-testing via an injected fake SDK client.
 
 ---
 
@@ -446,7 +489,7 @@ fallback analysis:
 - The operator UI shows the incident regardless of AI health.
 - Future tests must cover: missing provider, timeout, malformed response,
   quota/rate errors, and the deterministic incident surviving AI failure.
-- Not implemented in Phase 3-A.
+- Not implemented yet; planned for Phase 3-B3 (fallback orchestration).
 
 ---
 
@@ -463,9 +506,9 @@ The AI context must never contain:
 Citizen reports should be **summarized/minimized** where possible (counts,
 categories, severities) instead of passing raw bodies; descriptions are passed
 only when required for explanation and are still subject to minimization.
-Provider credentials live outside NEER's data path (environment/secret
-management at the provider call site, which is a later phase). Tests in a
-future phase must scan context payloads for the absence of secrets.
+Provider credentials live outside NEER's data path — the provider call site
+(Phase 3-B2) reads `GEMINI_API_KEY` from the environment and never logs it.
+Tests scan context payloads and provider behaviors for the absence of secrets.
 
 ---
 
@@ -545,13 +588,17 @@ Documentation-level specification for tests a later phase implements:
 None of these tests were added in Phase 3-A (design-only). Phase 3-B1
 implements the validation-schema ground truth these tests build on (context
 serialization, required fields, secret absence, authoritative/AI separation,
-structured output validation via the Pydantic schemas); the provider-behavior
-tests (missing provider, timeout, malformed response, fallback) land with the
-provider implementation in Phase 3-B2+.
+structured output validation via the Pydantic schemas). Phase 3-B2 lands the
+provider-behavior tests for the Gemini provider — missing key, timeout, network
+failure, malformed/invalid/mismatched responses, advisory enforcement — all
+network-free via an injected fake SDK client, plus an opt-in live Gemini test
+(`NEER_RUN_LIVE_GEMINI_TEST=1` + `GEMINI_API_KEY`). Fallback-behavior tests
+(missing provider, quota/rate, deterministic incident surviving AI failure)
+land with fallback orchestration in Phase 3-B3.
 
 ---
 
-## Phase 3-A / 3-B1 Scope Boundary
+## Phase 3-A / 3-B1 / 3-B2 Scope Boundary
 
 Implemented in Phase 3-A:
 
@@ -564,17 +611,24 @@ Implemented in Phase 3-B1:
 - `AIProvider` interface + error contract
 - schema-validation tests
 
-Not implemented (they land in Phase 3-B2 and later):
+Implemented in Phase 3-B2:
 
-- any concrete provider (`gemini.py`, SDK calls)
-- any API client / network call
-- prompt construction / execution against a model
-- fallback runtime behavior
-- FastAPI routes
-- PostgreSQL/database models
+- concrete Gemini provider (`gemini_provider.py`: `GeminiProvider`,
+  `GeminiProviderConfig`, `SYSTEM_INSTRUCTIONS`)
+- `google-genai` dependency, structured-output request (JSON schema),
+  local re-validation, and `AIProviderError` mapping
+- network-free provider tests (fake SDK client) + opt-in live Gemini test
+- `GEMINI_API_KEY` handling (never logged/committed; missing → unavailable)
+
+Not implemented (they land in Phase 3-B3 and later):
+
+- fallback orchestration behind the `AIProvider` contract
+- any FastAPI route / operator workflow
+- PostgreSQL/persistence models
 - frontend AI components
 - any modification of simulation / baseline / detector / correlation / incident
-  engines or existing tests
+  engines, the 3-B1 context/analysis/interface modules, or existing tests
 
-The deterministic core remains locked (82 baseline tests + 26 Phase 3-B1 tests
-all passing).
+The deterministic core remains locked, and the whole contract suite passes:
+**131 tests** (108 prior + 23 Phase 3-B2), with the live Gemini test opting in
+only via `NEER_RUN_LIVE_GEMINI_TEST=1` + `GEMINI_API_KEY`.

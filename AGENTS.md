@@ -26,31 +26,37 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 3-B1 — AI Context Models & Provider Interface
+## Current Development Phase: Phase 3-B2 — Gemini Provider Integration
 
-Implemented the data/interface layer of the AI contract (Phase 3-A is locked):
-`backend/app/intelligence/ai_context.py` (IncidentAIContext + deterministic
-`build_ai_context` + `serialize_context`), `ai_analysis.py` (AIIncidentAnalysis
-schema: causes, investigation actions, response options, uncertainty),
-`ai_provider.py` (AIProvider protocol + error contract). All deterministic,
-validated with Pydantic v2, documented in `docs/ai-context-contract.md`.
-Deterministic core (Phases 1–2C-B) remains locked and authoritative.
+Implemented the concrete LLM provider behind the Phase 3-A/3-B1 AI contract:
+`backend/app/intelligence/gemini_provider.py` (`GeminiProvider` +
+`GeminiProviderConfig` + deterministic `SYSTEM_INSTRUCTIONS`), using the
+current `google-genai` Python SDK. It turns ONE `IncidentAIContext` into ONE
+validated `AIIncidentAnalysis` via a single structured-output call (system
+instructions + `serialize_context()` + Pydantic JSON schema) and maps failures
+onto the `AIProviderError` hierarchy. Deterministic core (Phases 1–2C-B)
+remains locked and authoritative; the 3-B1 context/analysis models and the
+`AIProvider` interface are unchanged.
 
 Explicit boundaries for this phase:
 
-- no concrete LLM provider yet;
-- no external LLM/API calls, no SDK imports, no credentials/env secrets,
-  no network dependency;
-- deterministic core remains authoritative (AI receives structured context
-  only; AI cannot calculate or override deterministic numbers; AI cannot
-  control infrastructure);
-- no FastAPI routes, database models, frontend AI UI, prompt execution, or
-  fallback runtime yet.
+- API key comes from the `GEMINI_API_KEY` environment variable (or injected
+  config); never logged, never in errors, never committed;
+- structured-output-only: no tool/function calling, no search grounding, no
+  code execution; the response is re-validated locally with
+  `AIIncidentAnalysis.model_validate`;
+- deterministic values are never recomputed or overridden — they are not even
+  output fields of `AIIncidentAnalysis`;
+- unit tests are network-free (injected fake SDK client); a live Gemini
+  integration test is opt-in (`NEER_RUN_LIVE_GEMINI_TEST=1` + `GEMINI_API_KEY`)
+  and skipped otherwise;
+- no fallback orchestration yet (Phase 3-B3), no FastAPI routes, no database
+  models, no frontend AI UI.
 
 Do not modify `backend/app/simulation/`, `backend/app/intelligence/baseline.py`,
-`detector.py`, `correlation.py`, `incident.py`, or existing tests. Next phase
-is Phase 3-B2 (implement the concrete LLM provider behind the AIProvider
-interface).
+`detector.py`, `correlation.py`, `incident.py`, `ai_context.py`,
+`ai_analysis.py`, `ai_provider.py`, or existing tests. Next phase is Phase 3-B3
+(fallback orchestration behind the `AIProvider` contract).
 
 ## Demo that must work end-to-end (priority over extras)
 

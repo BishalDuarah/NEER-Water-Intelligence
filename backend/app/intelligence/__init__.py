@@ -1,10 +1,12 @@
-"""NEER Water Intelligence - Phases 2A/2B/2C-B/3-B1: baseline, anomaly
-detection, correlation, deterministic incident + risk assessment, and the AI
-context/output contract.
+"""NEER Water Intelligence - Phases 2A/2B/2C-B/3-A/3-B1/3-B2: baseline,
+anomaly detection, correlation, deterministic incident + risk assessment, the
+AI context/output contract, and the concrete Gemini provider.
 
 Signal-level intelligence, evidence correlation, and incident assessment are
-all deterministic and free of any LLM. Phase 3-B1 adds the AI boundary models
-and provider interface (still no LLM calls, no provider implementation).
+all deterministic and free of any LLM. Phase 3-B1 added the AI boundary models
+and provider interface; Phase 3-B2 implements the concrete Gemini provider
+behind that interface (SDK-backed, structured-output, network-bearing only when
+a provider instance exists).
 """
 
 from app.intelligence.ai_analysis import (
@@ -34,6 +36,13 @@ from app.intelligence.ai_provider import (
     ProviderUnavailableError,
 )
 
+from app.intelligence.gemini_provider import (
+    DEFAULT_MODEL,
+    API_KEY_ENV,
+    GeminiProvider,
+    GeminiProviderConfig,
+    SYSTEM_INSTRUCTIONS,
+)
 from app.intelligence.baseline import (
     BaselineConfig,
     BaselineSlot,
@@ -78,6 +87,7 @@ from app.intelligence.incident import (
 )
 
 __all__ = [
+    "API_KEY_ENV",
     "AIIncidentAnalysis",
     "AIProvider",
     "AIProviderError",
@@ -85,7 +95,10 @@ __all__ = [
     "CitizenReportSummary",
     "ClassificationSection",
     "ContributingSignalSummary",
+    "DEFAULT_MODEL",
     "EvidenceSection",
+    "GeminiProvider",
+    "GeminiProviderConfig",
     "IncidentAIContext",
     "IncidentSection",
     "InvestigationAction",
@@ -96,6 +109,7 @@ __all__ = [
     "ResponseOption",
     "RiskSection",
     "STATUS_ANOMALOUS",
+    "SYSTEM_INSTRUCTIONS",
     "STATUS_INSUFFICIENT",
     "STATUS_INVALID",
     "STATUS_NORMAL",

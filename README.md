@@ -2,7 +2,7 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 3-A (AI Context & Output Contract)** —
+This repository is in **Phase 3-B1 (AI Context Models & Provider Interface)** —
 the Phase 0 foundation (skeleton, database connection, health endpoint,
 frontend↔backend comms), the Phase 1 deterministic water-network data
 generator, a signal-level intelligence module that scores each measurement
@@ -10,9 +10,9 @@ against a time-of-day baseline (Phase 2A), a correlation engine that groups
 same-zone anomalies + citizen reports into scored evidence groups (Phase 2B),
 and a deterministic incident + risk engine that turns strong evidence into
 actionable incidents with classification, severity, and confidence (Phase
-2C-B). Phase 3-A defines the contract between this deterministic core and the
-future AI explanation/recommendation layer (design only — no integration
-implemented yet). See
+2C-B). Phase 3-A fixed the AI contract; Phase 3-B1 implements its data layer —
+the `IncidentAIContext`, `AIIncidentAnalysis` schema, and `AIProvider`
+interface (deterministic, no LLM calls). See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
 [`docs/correlation.md`](docs/correlation.md),
@@ -22,7 +22,7 @@ implemented yet). See
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 3-A)
+## Architecture (Phase 3-B1)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -34,15 +34,18 @@ this project.
   anomalies + citizen reports into scored evidence groups (Phase 2B), and a
 deterministic incident + risk engine (Phase 2C-B) that qualifies evidence
    groups and produces `IncidentAssessment` objects (classification, risk,
-   severity, confidence). No AI/LLM layer yet — Phase 3-A only fixes the AI
-   input/output contract (`docs/ai-context-contract.md`).
+   severity, confidence). Phase 3-B1 adds the AI boundary: `IncidentAIContext`
+   (+ `build_ai_context` / `serialize_context`), the `AIIncidentAnalysis`
+   output schema, and the `AIProvider` interface. Still no LLM calls or
+   concrete provider.
 
 ```
 backend/   FastAPI app, config, db session, /health, tests
 
            app/simulation/    data generator (Phase 1)
            app/intelligence/  baselines + anomaly detection (2A), correlation (2B),
-                              incident + risk assessment (2C-B)
+                              incident + risk assessment (2C-B),
+                              AI context/output models + provider interface (3-B1)
 frontend/  React app, API client, status view
 docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md,
            ai-context-contract.md
@@ -158,10 +161,13 @@ Expected golden output: one qualified Zone B incident
 
 ## What is NOT implemented yet
 
-The AI/LLM explanation + recommendation layer, incident lifecycle
+The concrete AI/LLM provider and prompt execution, incident lifecycle
 management/operator workflows, FastAPI routes / PostgreSQL persistence for
 intelligence findings, and the full dashboard are designed but not
 implemented. Incident generation, classification, risk scoring, severity, and
 confidence are implemented deterministically in Phase 2C-B
 (`backend/app/intelligence/incident.py`, tested in
-`backend/tests/test_incident_risk.py`).
+`backend/tests/test_incident_risk.py`); the AI context/output schemas and
+provider interface are implemented in Phase 3-B1 (`ai_context.py`,
+`ai_analysis.py`, `ai_provider.py`, tested in
+`backend/tests/test_ai_context_contract.py`) with no LLM calls yet.

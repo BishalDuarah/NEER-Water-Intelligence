@@ -1,11 +1,42 @@
 # AI Context & Output Contract
 
-> Phase 3-A — DESIGN / DOCUMENTATION ONLY.
-> This document defines the strict contract between the deterministic NEER
-> intelligence core and the future AI explanation/recommendation layer.
-> **Nothing in this phase is implemented**: no LLM provider, no API calls, no
-> FastAPI routes, no database models, no frontend AI UI. The deterministic
-> core (Phases 2A/2B/2C-B) remains locked and authoritative.
+> Phase 3-A defined the DESIGN contract; Phase 3-B1 implemented the contract's
+> data/interface layer. This document defines the contract between the
+> deterministic NEER intelligence core and the future AI
+> explanation/recommendation layer, and records the Phase 3-B1 implementation
+> status.
+
+## Implementation Status (Phase 3-B1)
+
+**Implemented** (all deterministic; zero LLM/network dependency):
+
+- context schema — `IncidentAIContext` + sections (`incident`, `evidence`,
+  `risk`, `classification`)
+  in `backend/app/intelligence/ai_context.py`;
+- context construction — `build_ai_context(incident, correlated_evidence=None)`
+  (deterministic projection from Phase 2C `Incident`, no clocks/random);
+- context serialization — `serialize_context()` (canonical, schema-ordered,
+  JSON-compatible, repr/secret-free);
+- output schema — `AIIncidentAnalysis` + nested models (`PossibleCause`,
+  `InvestigationAction`, `ResponseOption`, `Uncertainty`)
+  in `backend/app/intelligence/ai_analysis.py`;
+- provider interface — `AIProvider` protocol + error contract
+  (`AIProviderError`, `ProviderUnavailableError`, `ProviderTimeoutError`,
+  `MalformedAIResponseError`, `AIValidationError`)
+  in `backend/app/intelligence/ai_provider.py`;
+- validation — Pydantic v2 with strict constraints (ranges, enums, `Literal`
+  framing, advisory-only responses, incident_id reference pattern);
+- tests — `backend/tests/test_ai_context_contract.py` (26 tests).
+
+**Not implemented** (deferred to Phase 3-B2 and later):
+
+- concrete LLM provider;
+- any provider/LLM integration or API calls;
+- prompt construction/execution against a model;
+- fallback runtime behavior;
+- API integration (routes, DB persistence, frontend AI UI).
+
+The deterministic core (Phases 2A/2B/2C-B) remains locked and authoritative.
 
 ## Purpose
 
@@ -511,24 +542,39 @@ Documentation-level specification for tests a later phase implements:
 - attempted autonomous command rejected
 - deterministic incident survives AI failure
 
-None of these tests are added in Phase 3-A; this phase is design-only.
+None of these tests were added in Phase 3-A (design-only). Phase 3-B1
+implements the validation-schema ground truth these tests build on (context
+serialization, required fields, secret absence, authoritative/AI separation,
+structured output validation via the Pydantic schemas); the provider-behavior
+tests (missing provider, timeout, malformed response, fallback) land with the
+provider implementation in Phase 3-B2+.
 
 ---
 
-## Phase 3-A Scope Boundary
+## Phase 3-A / 3-B1 Scope Boundary
 
 Implemented in Phase 3-A:
 
 - this contract document only
 
-Not implemented in Phase 3-A (explicitly out of scope):
+Implemented in Phase 3-B1:
 
-- `ai.py`, `gemini.py`, any provider implementation
+- AI context models (`IncidentAIContext`), construction, and serialization
+- AI output models (`AIIncidentAnalysis`)
+- `AIProvider` interface + error contract
+- schema-validation tests
+
+Not implemented (they land in Phase 3-B2 and later):
+
+- any concrete provider (`gemini.py`, SDK calls)
 - any API client / network call
+- prompt construction / execution against a model
+- fallback runtime behavior
 - FastAPI routes
 - PostgreSQL/database models
 - frontend AI components
 - any modification of simulation / baseline / detector / correlation / incident
   engines or existing tests
 
-The deterministic core remains locked at 82/82 tests.
+The deterministic core remains locked (82 baseline tests + 26 Phase 3-B1 tests
+all passing).

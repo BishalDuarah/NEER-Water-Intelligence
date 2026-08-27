@@ -26,28 +26,31 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 3-A — AI Context & Output Contract
+## Current Development Phase: Phase 3-B1 — AI Context Models & Provider Interface
 
-DESIGN/DOCUMENTATION ONLY. Phases 1, 2A, 2B, 2C-A, and 2C-B are complete and
-locked. The deterministic core is verified at 82/82 tests. Phase 3-A defines
-the strict contract between the deterministic intelligence core and the future
-AI layer in `docs/ai-context-contract.md` (input context, authoritative vs
-interpretive fields, output schema, prompt strategy, provider abstraction,
-validation, fallback, security/privacy, golden example, frontend contract,
-future testing contract).
+Implemented the data/interface layer of the AI contract (Phase 3-A is locked):
+`backend/app/intelligence/ai_context.py` (IncidentAIContext + deterministic
+`build_ai_context` + `serialize_context`), `ai_analysis.py` (AIIncidentAnalysis
+schema: causes, investigation actions, response options, uncertainty),
+`ai_provider.py` (AIProvider protocol + error contract). All deterministic,
+validated with Pydantic v2, documented in `docs/ai-context-contract.md`.
+Deterministic core (Phases 1–2C-B) remains locked and authoritative.
 
-THIS PHASE IS DESIGN/DOCUMENTATION ONLY:
+Explicit boundaries for this phase:
 
-- no LLM provider implementation;
-- deterministic core remains locked (simulation, baseline, detector,
-  correlation, incident — do not modify; existing tests stay untouched);
-- AI receives structured context only (never raw sensor streams);
-- AI cannot calculate or override deterministic numbers (risk, severity,
-  scores, classification, timestamps, population);
-- AI cannot control infrastructure (no valve/pump/network commands);
-- no FastAPI routes, database models, frontend AI UI, or API calls.
+- no concrete LLM provider yet;
+- no external LLM/API calls, no SDK imports, no credentials/env secrets,
+  no network dependency;
+- deterministic core remains authoritative (AI receives structured context
+  only; AI cannot calculate or override deterministic numbers; AI cannot
+  control infrastructure);
+- no FastAPI routes, database models, frontend AI UI, prompt execution, or
+  fallback runtime yet.
 
-Next phase is Phase 3-B (implement the AI provider behind this contract).
+Do not modify `backend/app/simulation/`, `backend/app/intelligence/baseline.py`,
+`detector.py`, `correlation.py`, `incident.py`, or existing tests. Next phase
+is Phase 3-B2 (implement the concrete LLM provider behind the AIProvider
+interface).
 
 ## Demo that must work end-to-end (priority over extras)
 

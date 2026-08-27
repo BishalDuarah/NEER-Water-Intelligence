@@ -1,10 +1,38 @@
-"""NEER Water Intelligence - Phases 2A/2B/2C-B: baseline, anomaly detection,
-correlation, and deterministic incident + risk assessment.
+"""NEER Water Intelligence - Phases 2A/2B/2C-B/3-B1: baseline, anomaly
+detection, correlation, deterministic incident + risk assessment, and the AI
+context/output contract.
 
 Signal-level intelligence, evidence correlation, and incident assessment are
-all deterministic and free of any LLM. The AI layer is a later phase and is NOT
-here.
+all deterministic and free of any LLM. Phase 3-B1 adds the AI boundary models
+and provider interface (still no LLM calls, no provider implementation).
 """
+
+from app.intelligence.ai_analysis import (
+    AIIncidentAnalysis,
+    InvestigationAction,
+    PossibleCause,
+    ResponseOption,
+    Uncertainty,
+)
+from app.intelligence.ai_context import (
+    CitizenReportSummary,
+    ClassificationSection,
+    ContributingSignalSummary,
+    EvidenceSection,
+    IncidentAIContext,
+    IncidentSection,
+    RiskSection,
+    build_ai_context,
+    serialize_context,
+)
+from app.intelligence.ai_provider import (
+    AIProvider,
+    AIProviderError,
+    AIValidationError,
+    MalformedAIResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 
 from app.intelligence.baseline import (
     BaselineConfig,
@@ -50,6 +78,23 @@ from app.intelligence.incident import (
 )
 
 __all__ = [
+    "AIIncidentAnalysis",
+    "AIProvider",
+    "AIProviderError",
+    "AIValidationError",
+    "CitizenReportSummary",
+    "ClassificationSection",
+    "ContributingSignalSummary",
+    "EvidenceSection",
+    "IncidentAIContext",
+    "IncidentSection",
+    "InvestigationAction",
+    "MalformedAIResponseError",
+    "PossibleCause",
+    "ProviderTimeoutError",
+    "ProviderUnavailableError",
+    "ResponseOption",
+    "RiskSection",
     "STATUS_ANOMALOUS",
     "STATUS_INSUFFICIENT",
     "STATUS_INVALID",
@@ -71,8 +116,10 @@ __all__ = [
     "IncidentType",
     "RiskFactors",
     "SeverityLabel",
+    "Uncertainty",
     "assess_group",
     "assess_groups",
+    "build_ai_context",
     "build_baseline",
     "bucket_label",
     "bucket_of",
@@ -83,5 +130,6 @@ __all__ = [
     "compute_risk_score",
     "correlate_evidence",
     "detect_anomalies",
+    "serialize_context",
     "severity_from_risk",
 ]

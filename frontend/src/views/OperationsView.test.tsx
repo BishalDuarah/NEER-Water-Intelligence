@@ -95,7 +95,7 @@ describe("OperationsView", () => {
     expect(queue.getByText("5h 45m")).not.toBeNull();
     expect(queue.getByText("32,000")).not.toBeNull();
     expect(queue.getByText("DETECTED")).not.toBeNull();
-    expect(queue.getAllByText(/below_baseline/).length).toBeGreaterThan(0);
+    expect(queue.getAllByText(/below/).length).toBeGreaterThan(0);
 
     const reports = within(screen.getByLabelText("Citizen reports"));
     expect(reports.getByText(/· 12 reports/)).not.toBeNull();
@@ -182,5 +182,21 @@ describe("OperationsView", () => {
       ...defaultRequest,
       scenario: "ZONE_B_SUPPLY_INCIDENT",
     });
+  });
+
+  it("reports the incident for investigation when its row is selected", () => {
+    const onSelectIncident = vi.fn();
+    render(
+      <OperationsView
+        state={{ status: "success", result: goldenResponse }}
+        onRun={() => {}}
+        onSelectIncident={onSelectIncident}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Open investigation/ }),
+    );
+    expect(onSelectIncident).toHaveBeenCalledWith("INC-B-20260101T060000Z");
   });
 });

@@ -35,6 +35,27 @@ export function formatConfidencePercent(confidence: number): string {
   return `${(confidence * 100).toFixed(1)}%`;
 }
 
+export function formatConfidencePair(confidence: number): string {
+  return `${confidence.toFixed(4)} / ${(confidence * 100).toFixed(2)}%`;
+}
+
+export function directionIndicator(direction: string): string {
+  switch (direction) {
+    case "above":
+    case "above_baseline":
+      return "\u2191";
+    case "below":
+    case "below_baseline":
+      return "\u2193";
+    case "neutral":
+      return "\u2192";
+    case "abnormal":
+      return "\u2248";
+    default:
+      return "\u2014";
+  }
+}
+
 export function formatDuration(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;

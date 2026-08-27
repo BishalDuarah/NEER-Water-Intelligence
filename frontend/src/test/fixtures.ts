@@ -5,7 +5,7 @@ import type {
 
 function analysisFor(summary: string): AnalysisIncidentOut["analysis"] {
   return {
-    incident_id: "INC-ZB-000042",
+    incident_id: "INC-B-20260101T060000Z",
     summary,
     evidence_interpretation:
       "Flow, pressure, quality and consumption signals deviate together within a short window, and citizen reports rise in the same period — characteristic of a supply-side disturbance in one zone.",
@@ -46,7 +46,7 @@ function analysisFor(summary: string): AnalysisIncidentOut["analysis"] {
 
 export const goldenIncident: AnalysisIncidentOut = {
   incident: {
-    incident_id: "INC-ZB-000042",
+    incident_id: "INC-B-20260101T060000Z",
     zone_id: "B",
     incident_type: "WATER_LOSS",
     status: "DETECTED",
@@ -63,16 +63,16 @@ export const goldenIncident: AnalysisIncidentOut = {
   },
   evidence: {
     contributing_signals: [
-      { metric: "flow", direction: "above_baseline", anomaly_count: 22, mean_z: 3.02, mean_abs_z: 3.02 },
-      { metric: "pressure", direction: "below_baseline", anomaly_count: 27, mean_z: -2.91, mean_abs_z: 2.91 },
-      { metric: "quality", direction: "abnormal", anomaly_count: 17, mean_z: 2.66, mean_abs_z: 2.66 },
-      { metric: "consumption", direction: "above_baseline", anomaly_count: 23, mean_z: 2.41, mean_abs_z: 2.41 },
+      { metric: "flow", direction: "above", anomaly_count: 22, mean_z: 8.16, mean_abs_z: 8.16 },
+      { metric: "pressure", direction: "below", anomaly_count: 24, mean_z: -32.009, mean_abs_z: 32.009 },
+      { metric: "quality", direction: "below", anomaly_count: 20, mean_z: -4.669, mean_abs_z: 4.669 },
+      { metric: "consumption", direction: "below", anomaly_count: 23, mean_z: -12.883, mean_abs_z: 12.883 },
     ],
-    signal_types: ["flow", "pressure", "quality", "consumption"],
+    signal_types: ["consumption", "flow", "pressure", "quality"],
     evidence_score: 0.985,
-    temporal_coherence: 0.94,
-    spatial_coherence: 0.91,
-    signal_diversity: 0.8,
+    temporal_coherence: 1.0,
+    spatial_coherence: 1.0,
+    signal_diversity: 1.0,
     persistence_minutes: 345,
     sensor_anomaly_count: 89,
     citizen_report_count: 12,

@@ -8,9 +8,10 @@ import { IdlePanel, LoadingPanel, ErrorPanel } from "../components/AnalysisState
 interface IncidentsViewProps {
   state: AnalysisState;
   onRun: (request: AnalysisRunRequest) => void;
+  onSelectIncident?: (incidentId: string) => void;
 }
 
-export function IncidentsView({ state, onRun }: IncidentsViewProps) {
+export function IncidentsView({ state, onRun, onSelectIncident }: IncidentsViewProps) {
   const lastRequestRef = useRef<AnalysisRunRequest | null>(null);
 
   const handleRun = (request: AnalysisRunRequest) => {
@@ -43,6 +44,7 @@ export function IncidentsView({ state, onRun }: IncidentsViewProps) {
           incidents={state.result.incidents}
           title="All Incidents"
           subtitle="Every correlated event in the latest analysis run"
+          onSelect={onSelectIncident}
         />
       )}
     </div>

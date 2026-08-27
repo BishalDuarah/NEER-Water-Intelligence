@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  directionIndicator,
+  formatConfidencePair,
   formatConfidencePercent,
   formatDateTime,
   formatDuration,
@@ -20,6 +22,18 @@ describe("presentation helpers", () => {
   it("formats confidence as a percent with one decimal", () => {
     expect(formatConfidencePercent(0.9918)).toBe("99.2%");
     expect(formatConfidencePercent(0.5)).toBe("50.0%");
+  });
+
+  it("formats confidence as a precise decimal plus percent pair", () => {
+    expect(formatConfidencePair(0.9918)).toBe("0.9918 / 99.18%");
+    expect(formatConfidencePair(0.5)).toBe("0.5000 / 50.00%");
+  });
+
+  it("maps API signal directions to glyphs without changing the token", () => {
+    expect(directionIndicator("above")).toBe("\u2191");
+    expect(directionIndicator("below")).toBe("\u2193");
+    expect(directionIndicator("neutral")).toBe("\u2192");
+    expect(directionIndicator("unknown")).toBe("\u2014");
   });
 
   it("formats durations", () => {

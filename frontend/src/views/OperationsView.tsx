@@ -15,9 +15,10 @@ import { IdlePanel, LoadingPanel, ErrorPanel } from "../components/AnalysisState
 interface OperationsViewProps {
   state: AnalysisState;
   onRun: (request: AnalysisRunRequest) => void;
+  onSelectIncident?: (incidentId: string) => void;
 }
 
-export function OperationsView({ state, onRun }: OperationsViewProps) {
+export function OperationsView({ state, onRun, onSelectIncident }: OperationsViewProps) {
   const lastRequestRef = useRef<AnalysisRunRequest | null>(null);
 
   const handleRun = (request: AnalysisRunRequest) => {
@@ -129,7 +130,10 @@ export function OperationsView({ state, onRun }: OperationsViewProps) {
             aria-label="Incident management"
           >
             <div className="lg:col-span-2">
-              <IncidentQueue incidents={state.result.incidents} />
+              <IncidentQueue
+                incidents={state.result.incidents}
+                onSelect={onSelectIncident}
+              />
             </div>
             <CitizenReportsPanel incidents={state.result.incidents} />
           </section>

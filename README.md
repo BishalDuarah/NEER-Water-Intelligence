@@ -2,7 +2,7 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 4-A1 (Frontend Operations Dashboard)** — the
+This repository is in **Phase 4-A2 (Incident Investigation View)** — the
 Phase 0 foundation (skeleton, database connection, health endpoint,
 frontend↔backend comms), the Phase 1 deterministic water-network data
 generator, a signal-level intelligence module that scores each measurement
@@ -19,10 +19,12 @@ consumption and fails safely onto a deterministic analysis
 (`ai_orchestrator.py`: `AIOrchestrator`, deterministic `build_fallback_analysis`);
 Phase 3-C1 exposes all of that through a small FastAPI analysis endpoint
 (`POST /api/v1/analysis/run` — see [`docs/analysis-api.md`](docs/analysis-api.md));
-Phase 4-A1 builds the operations dashboard that closely reproduces the Aqua
+Phase 4-A1 built the operations dashboard that closely reproduces the Aqua
 Sentinel/NEER prototype's information architecture and dark design system,
 consuming the 3-C1 API as the single source of truth (no mock data, no
-client-side intelligence).
+client-side intelligence); Phase 4-A2 adds a dedicated incident investigation
+view that renders each correlated incident's deterministic evidence and AI
+analysis straight from that API response.
 See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
@@ -33,7 +35,7 @@ See
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 4-A1)
+## Architecture (Phase 4-A2)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -76,8 +78,9 @@ app/simulation/    data generator (Phase 1)
            app/schemas/       Pydantic API boundary schemas (health, analysis)
            app/api/routes/    FastAPI adapters (health, analysis /run)
 frontend/  React app: analysis API client, operations dashboard
-           (Operations / Water Network / Incidents tabs), dark design system,
-           vitest + testing-library tests
+           (Operations / Water Network / Incidents tabs), incident investigation
+           view (read-only evidence + AI analysis per incident), dark design
+           system, vitest + testing-library tests
 docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md,
            ai-context-contract.md, analysis-api.md
 docker-compose.yml  PostgreSQL service
@@ -138,7 +141,12 @@ The app is served at http://localhost:5173 and calls the backend
 [`docs/analysis-api.md`](docs/analysis-api.md)). The Operations dashboard
 ("Network Command View") includes the Incident Simulation Engine (scenario
 toggle + run), the 5-stat network summary, Zone Health Overview, Active
-Incidents queue, and Citizen Reports. `VITE_API_BASE_URL` defaults to
+Incidents queue, and Citizen Reports. Each incident row exposes an "Open
+investigation" affordance that opens the read-only
+**Incident Investigation View** (incident header, risk & assessment,
+contributing signals, correlated evidence, citizen-report counts, and the
+AI/deterministic analysis with possible causes, suggested investigation,
+advisory response options, and uncertainty). `VITE_API_BASE_URL` defaults to
 `http://localhost:8000`; the backend CORS allows `http://localhost:5173`.
 
 Run the frontend tests:
@@ -147,7 +155,7 @@ Run the frontend tests:
 npm test
 ```
 
-The two live-integration tests are skipped unless `NEER_LIVE_INTEGRATION=1`
+The three live-integration tests are skipped unless `NEER_LIVE_INTEGRATION=1`
 and a backend is running on port 8000.
 
 ### 4. Run the simulator (Phase 1)
@@ -293,13 +301,21 @@ The data source is deterministic simulation, not a live water-system feed.
   ("Normal operation" or `ZONE_B_SUPPLY_INCIDENT`), press "Simulate Water
   Incident", and confirm the deterministic incident rows, network status pill,
   zone health, incident queue, and citizen reports render from the API response.
+  Then click "Open investigation" on the golden Zone B incident to confirm the
+  read-only incident investigation view renders the same API values (risk
+  `91.52`, confidence `0.9918 / 99.18%`, evidence `0.985`, 4 signals with API
+  directions, 89 anomalies, 12 reports) and that "← Back to Operations" returns
+  to the dashboard without changing tabs.
 - `python -m app.simulation` produces reproducible measurement output.
 
 ## What is NOT implemented yet
 
 Operator workflows / incident lifecycle management (assign → resolve) and
 PostgreSQL persistence for intelligence findings (each API run is an
-independent in-memory analysis) are designed but not implemented. Raw telemetry
+independent in-memory analysis) are designed but not implemented. The incident
+investigation view is strictly read-only: evidence, risk, and advisory AI
+recommendations only — there are no Shut/Stop/Dispatch/Isolate controls and no
+lifecycle actions in the UI. Raw telemetry
 time-series (per-zone charts, real sensor streams) is also not implemented —
 the Water Network tab and the telemetry panels are honest placeholders until a
 telemetry API phase exists.

@@ -10,9 +10,11 @@ import {
 import type { AnalysisIncidentOut } from "../types/analysis";
 import { AIStatusNotice } from "./AIStatusNotice";
 import { SeverityChip } from "./SeverityChip";
+import { ArrowRightIcon } from "./icons";
 
 interface IncidentRowProps {
   item: AnalysisIncidentOut;
+  onSelect?: (incidentId: string) => void;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -24,7 +26,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function IncidentRow({ item }: IncidentRowProps) {
+export function IncidentRow({ item, onSelect }: IncidentRowProps) {
   const { incident, evidence } = item;
 
   return (
@@ -97,6 +99,17 @@ export function IncidentRow({ item }: IncidentRowProps) {
           </p>
         </div>
       </div>
+
+      {onSelect && (
+        <button
+          type="button"
+          onClick={() => onSelect(incident.incident_id)}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Open investigation
+          <ArrowRightIcon className="size-3.5" />
+        </button>
+      )}
     </article>
   );
 }

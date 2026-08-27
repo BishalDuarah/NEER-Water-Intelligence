@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { runAnalysis } from "../api/analysis";
 import { OperationsView } from "../views/OperationsView";
+import { IncidentInvestigationView } from "../views/IncidentInvestigationView";
 import type { AnalysisState } from "../hooks/useAnalysis";
 
 const live = process.env.NEER_LIVE_INTEGRATION === "1";
@@ -36,6 +37,40 @@ run("live backend integration (requires NEER_LIVE_INTEGRATION=1)", () => {
     expect(html).toContain("91.52");
     expect(html).toContain("Network Status: Alert");
     expect(html).toContain("AI analysis unavailable");
+  }, 30000);
+
+  it("renders the investigation view for a real golden incident", async () => {
+    const result = await runAnalysis({
+      seed: 42,
+      days: 1,
+      scenario: "ZONE_B_SUPPLY_INCIDENT",
+      reference_seed: 99,
+    });
+
+    const incident = result.incidents[0];
+    expect(incident).toBeDefined();
+    expect(incident.incident.incident_id).toBe("INC-B-20260101T060000Z");
+    expect(incident.incident.confidence).toBeCloseTo(0.9918, 3);
+    expect(incident.evidence.temporal_coherence).toBeCloseTo(1.0, 2);
+    expect(incident.evidence.spatial_coherence).toBeCloseTo(1.0, 2);
+    expect(incident.evidence.signal_diversity).toBeCloseTo(1.0, 2);
+    expect(incident.evidence.persistence_minutes).toBe(345);
+    expect(incident.evidence.sensor_anomaly_count).toBe(89);
+    expect(incident.evidence.citizen_report_count).toBe(12);
+
+    const html = renderToStaticMarkup(
+      <IncidentInvestigationView incident={incident} onBack={() => {}} />,
+    );
+    expect(html).toContain("ZONE B / WATER LOSS / CRITICAL");
+    expect(html).toContain("91.52");
+    expect(html).toContain("0.9918 / 99.18%");
+    expect(html).toContain("32,000");
+    expect(html).toContain("345 minutes");
+    expect(html).toContain("No infrastructure action is executed by this interface.");
+    expect(
+      html.includes("AI analysis unavailable") ||
+        html.includes("AI-assisted interpretation"),
+    ).toBe(true);
   }, 30000);
 
   it("runs a normal analysis and renders zero incidents", async () => {

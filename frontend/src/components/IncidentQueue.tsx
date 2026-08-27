@@ -7,12 +7,14 @@ interface IncidentQueueProps {
   incidents: AnalysisIncidentOut[];
   title?: string;
   subtitle?: string;
+  onSelect?: (incidentId: string) => void;
 }
 
 export function IncidentQueue({
   incidents,
   title = "Active Incidents",
   subtitle = "Correlated, risk-ranked events awaiting response",
+  onSelect,
 }: IncidentQueueProps) {
   return (
     <section className="panel p-5" aria-label="Incident queue">
@@ -29,7 +31,11 @@ export function IncidentQueue({
       ) : (
         <div className="mt-4 flex flex-col gap-3" data-testid="incident-queue">
           {incidents.map((item) => (
-            <IncidentRow key={item.incident.incident_id} item={item} />
+            <IncidentRow
+              key={item.incident.incident_id}
+              item={item}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}

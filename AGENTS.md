@@ -26,57 +26,99 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 4-A1 — Frontend Operations Dashboard
+## Current Development Phase: Phase 4-A2 — Incident Investigation View
 
-Phases 3-B2, 3-B3, and 3-C1 are complete and locked. Phase 4-A1 builds and
-redesigns the frontend to closely reproduce the delivered Aqua Sentinel/NEER
-prototype's information architecture and dark visual design system
-(https://aqua-sentinel-eosin.vercel.app/), while keeping the 3-C1 API as the
-single source of truth.
+Phases 3-B2, 3-B3, 3-C1, and 4-A1 are complete and locked. Phase 4-A2 extends
+the Operations dashboard so an operator can select a correlated incident and
+inspect its structured deterministic evidence and AI analysis in a dedicated
+incident investigation view — always rendered from the 3-C1 API response, never
+from mock or client-side data.
 
-Phase 4-A1 scope (complete):
+Phase 4-A1 (complete, locked): redesign of the operations dashboard mirroring
+the Aqua Sentinel/NEER prototype's information architecture and dark design
+system (IBM Plex Sans/Mono, oklch token palette in `tailwind.config.js`,
+`.panel`/`.label-mono`/`.chip` classes in `src/index.css`). The app calls
+`POST /api/v1/analysis/run` via `frontend/src/api/analysis.ts`; no incident
+data, risk weights, or severity logic live in the client. `source-integrity.test.ts`
+guards golden literals (`91.52`, `0.9918`, `0.985`, `32000`, risk weights) and
+the scenario id (`ZONE_B_SUPPLY_INCIDENT`, allowed only in `src/types/analysis.ts`).
+Views: Operations ("Network Command View"), Incidents ("NEER Response Queue"),
+Water Network (honest placeholder). Test counts below.
 
-- **No mock incident data and no client-side intelligence.** The React app
-  (`frontend/`) never hardcodes incidents, risk, severity, or evidence; it calls
-  `POST /api/v1/analysis/run` via `frontend/src/api/analysis.ts` and renders
-  what the backend returns. Golden values, risk weights, and the scenario id
-  are guarded by `src/test/source-integrity.test.ts` (scenario id only in
-  `src/types/analysis.ts`).
-- **Design system** mirrors the prototype: IBM Plex Sans/Mono, dark navy
-  oklch token palette in `tailwind.config.js` (with `<alpha-value>` for opacity
-  utilities), `.panel`/`.label-mono`/`.chip` component classes in
-  `src/index.css`.
-- **Information architecture** matches the prototype: sticky header with NEER
-  branding + Demo/Simulation Mode badge, nav tabs (Operations / Water Network /
-  Incidents). Operations = "Network Command View" with 5-stat summary,
-  Zone Health Overview, Active Incidents queue, and Citizen Reports panels.
-  Incidents = "NEER Response Queue". Water Network = honest later-phase
-  placeholder (no telemetry endpoints exist yet).
-- **Simulation engine** ("Simulate Water Incident") is the real demo control:
-  scenario toggle (Normal operation / `ZONE_B_SUPPLY_INCIDENT`) → `runAnalysis`
-  → renders deterministic incident rows (risk, confidence, evidence,
-  persistence, impact, anomalies, contributing signals) + AI status chip
-  (AI available / deterministic fallback with reason).
-- Views: `OperationsView`, `IncidentsView`, `NetworkView` selected by
-  `ViewRouter`; `App.tsx` owns tab state + `useAnalysis`. Retry re-runs the
-  last submitted request. Severity tones: NORMAL/LOW→ok, MEDIUM→warn,
-  HIGH/CRITICAL→destructive.
-- Tests (vitest + @testing-library/react + jsdom): **33 passed, 2 skipped**
-  (skipped = live integration, requires `NEER_LIVE_INTEGRATION=1` and a running
-  backend). `npm run typecheck` and `npm run build` pass; live integration
-  verified against the running backend (golden + normal).
+Phase 4-A2 scope (complete):
+
+- **Selection.** `IncidentRow` gains an "Open investigation" affordance when an
+  `onSelect` callback is provided; the callback is threaded through
+  `IncidentQueue` → `OperationsView`/`IncidentsView` → `ViewRouter` → `App.tsx`,
+  which owns a `selectedIncidentId` state (no router, no browser-history
+  complexity). Selecting an incident swaps the main area for
+  `IncidentInvestigationView`; "← Back to Operations" clears the selection;
+  switching tabs also clears it.
+- **IncidentInvestigationView** (`frontend/src/views/IncidentInvestigationView.tsx`)
+  renders only fields from `AnalysisIncidentOut` (`incident` deterministic
+  record, `evidence`, `ai` attribution, `analysis` AI output) in sections:
+  incident header (zone_id, raw `incident_type` token, severity, status,
+  incident_id, timestamps; hierarchy "ZONE B / WATER LOSS / CRITICAL"), Risk &
+  Assessment (risk score, `confidence` as "0.9918 / 99.18%", evidence score,
+  persistence in minutes + `formatDuration`, estimated population, citizen
+  report count, sensor anomaly count, signal diversity), Contributing Signals
+  (per-signal metric, direction token + presentation glyph via
+  `directionIndicator`, anomaly_count, mean_z, mean_abs_z — direction always
+  from the API, never inferred), Correlated Evidence (authoritative sentence
+  "Multiple independent signals were observed together over time." plus
+  temporal/spatial coherence, diversity, persistence, `classification_reason`,
+  `explanation`), Citizen Reports (aggregated counts only — no locations or
+  personal details), and the Intelligence Analysis section.
+- **AI vs deterministic separation.** The analysis section is clearly
+  labeled: AI source shows "AI-assisted interpretation" + "AI Incident
+  Analysis"; FALLBACK shows "Deterministic fallback analysis" + "AI analysis
+  unavailable — deterministic analysis remains available." + `fallback_reason`
+  (reusing `AIStatusNotice`). AI fields can never overwrite deterministic
+  values (risk/severity/type/confidence come only from `incident`).
+  `response_options` are explicit **advisory** suggestions with zero button
+  controls — there are no Shut/Stop/Dispatch/Isolate actions anywhere.
+- **Uncertainty / safety.** `possible_causes` render verbatim with their
+  `framing` (possible/plausible/consistent); `investigation_actions` render as
+  "Suggested investigation" with priority + rationale (never executed);
+  `uncertainty` lists render from the API and the deterministic confidence is
+  shown as "Assessment confidence: 99.18%" with an explicit note that
+  confidence ≠ probability of a specific physical cause. A persistent,
+  unobtrusive notice reads: "Decision support only. NEER provides
+  evidence-based analysis and advisory recommendations. No infrastructure
+  action is executed by this interface."
+- **Presentation helpers.** `frontend/src/lib/presentation.ts` adds
+  `formatConfidencePair` (decimal + percent) and `directionIndicator` (glyphs
+  for the engine's `above`/`below`/`neutral` tokens only).
+- **Tests** (vitest + @testing-library/react + jsdom): **51 passed, 3 skipped**
+  (skipped = live integration; requires `NEER_LIVE_INTEGRATION=1` and a running
+  backend). Coverage includes the 4-A2 investigation scenarios (golden values,
+  4 signal rows with API directions, AI vs FALLBACK distinction, AI summary,
+  framing, suggested investigation, advisory response options, uncertainty,
+  safety notice, no infra-control buttons, no AI-overwrite, back navigation,
+  safe empty state) plus an `App.test.tsx` end-to-end selection flow.
+  `npm run typecheck` and `npm run build` pass. Live integration verified
+  against the running backend: golden dashboard, golden investigation view,
+  and normal run (all 3 pass). Fixtures in `src/test/fixtures.ts` mirror the
+  verified live golden response (incident_id `INC-B-20260101T060000Z`, risk
+  `91.52`, confidence `0.9918`, evidence `0.985`, diversity/coherence `1.0`,
+  4 signals with `above`/`below`, 345 min, 32 000 population, 89 anomalies,
+  12 reports).
 - Backend untouched this phase; backend regression baseline remains
   **235 passed, 1 skipped**.
 
-Explicit boundaries for Phase 4-A1:
+Explicit boundaries for Phase 4-A2:
 
 - No backend route/service/schema/intelligence changes; no DB writes; no
-  auth; no WebSockets/SSE/streaming on the frontend.
-- No mock/chart data: telemetry time-series visualization and per-zone charts
-  are honest placeholders until a telemetry API phase exists.
-- No zone names invented: only zones A–D (from `KNOWN_ZONES`) with status
-  derived from API incidents; prototype demo sensor counts (42/38/19) are not
-  reproduced because the API has no sensor registry.
+  auth; no WebSockets/SSE/streaming.
+- No mock incident data and no client-side intelligence: every value in the
+  investigation view comes from the `analysis/run` response; no hardcoded
+  golden numbers and no invented risk factors (the API has no per-factor
+  breakdown — never recreate evidence/severity weights in React).
+- No infrastructure controls: investigation is read-only evidence + advisory
+  recommendations; operator lifecycle actions (assign/resolve) remain a later
+  phase.
+- No routing library; selection is plain component state so the header tabs
+  and back affordance always behave predictably.
 - Each analysis request is an independent in-memory run (3-C1 contract).
 
 ## Demo that must work end-to-end (priority over extras)

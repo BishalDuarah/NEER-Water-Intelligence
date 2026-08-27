@@ -26,17 +26,23 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current phase: Phase 2A — Baseline + Anomaly Detection
+## Current phase: Phase 2B — Correlation (evidence groups)
 
-Phase 1 (deterministic water-network simulation) is complete and audited, and
-is documented in `docs/simulation.md`. Phase 2A adds the signal-level
-intelligence module under `backend/app/intelligence/` (time-of-day baselines
-from reference data + bidrectional z-score anomaly detection), documented in
-`docs/anomaly_detection.md`. Do NOT yet build signal correlation, incident
-generation, incident classification, risk scoring, the AI/LLM layer, FastAPI
-routes for intelligence, PostgreSQL persistence of findings, or frontend
-consumption. Build incrementally; never generate the whole app in one step.
-After Phase 2A is stable, move to correlation + incident generation.
+Phase 1 (deterministic water-network simulation) is complete and audited
+(`docs/simulation.md`). Phase 2A added the signal-level module
+(`backend/app/intelligence/`: time-of-day baselines from reference data +
+bidirectional z-score anomaly detection), documented in
+`docs/anomaly_detection.md`. Phase 2B adds the correlation engine
+(`backend/app/intelligence/correlation.py`) that groups same-zone anomalies and
+citizen reports into correlated evidence groups scored by a documented
+`evidence_score` (correlation, NOT incident/risk/severity — no incident objects
+exist yet). See `docs/correlation.md`.
+
+Do NOT yet build incident generation, incident classification, risk scoring,
+the AI/LLM layer, FastAPI routes for intelligence, PostgreSQL persistence of
+findings, or frontend consumption. Build incrementally; never generate the
+whole app in one step. Next (Phase 2C): incident generation from evidence
+groups.
 
 ## Demo that must work end-to-end (priority over extras)
 

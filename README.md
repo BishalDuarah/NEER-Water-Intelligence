@@ -2,20 +2,22 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 2B (Correlation)** — the Phase 0 foundation
-(skeleton, database connection, health endpoint, frontend↔backend comms), the
-Phase 1 deterministic water-network data generator, a signal-level intelligence
-module that scores each measurement against a time-of-day baseline (Phase 2A),
-and a correlation engine that groups same-zone anomalies + citizen reports into
-scored evidence groups (Phase 2B). See
+This repository is in **Phase 2C-A (Incident & Risk Design)** — the Phase 0
+foundation (skeleton, database connection, health endpoint, frontend↔backend
+comms), the Phase 1 deterministic water-network data generator, a signal-level
+intelligence module that scores each measurement against a time-of-day baseline
+(Phase 2A), a correlation engine that groups same-zone anomalies + citizen
+reports into scored evidence groups (Phase 2B), and a design contract for
+deterministic incident classification + risk (Phase 2C-A). See
 [`docs/simulation.md`](docs/simulation.md),
-[`docs/anomaly_detection.md`](docs/anomaly_detection.md) and
-[`docs/correlation.md`](docs/correlation.md).
+[`docs/anomaly_detection.md`](docs/anomaly_detection.md),
+[`docs/correlation.md`](docs/correlation.md) and
+[`docs/incident-risk-design.md`](docs/incident-risk-design.md).
 
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 2B)
+## Architecture (Phase 2C-A)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -24,8 +26,9 @@ this project.
   data generator (zones, normal measurements, incident scenarios, citizen reports)
 - **Intelligence**: `backend/app/intelligence/` — time-of-day baselines +
   bidirectional z-score anomaly detection (Phase 2A) + gap-based correlation of
-  cases + citizen reports into evidence groups with a transparent evidence score
-  (Phase 2B). Signal/evidence level only — no incidents, risk, or LLM yet.
+  anomalies + citizen reports into evidence groups with a transparent evidence
+  score (Phase 2B). Signal/evidence level only — no incidents, risk, or LLM yet
+  (incident + risk are designed but not implemented).
 
 ```
 backend/   FastAPI app, config, db session, /health, tests
@@ -33,7 +36,7 @@ backend/   FastAPI app, config, db session, /health, tests
            app/simulation/    data generator (Phase 1)
            app/intelligence/  baselines + anomaly detection (2A), correlation (2B)
 frontend/  React app, API client, status view
-docs/      simulation.md, anomaly_detection.md, correlation.md
+docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md
 docker-compose.yml  PostgreSQL service
 ```
 
@@ -127,5 +130,6 @@ for group in result.groups:
 
 Incident generation, incident classification, risk scoring,
 incident management, the AI/LLM layer, FastAPI routes / PostgreSQL persistence
-for intelligence findings, and the full dashboard are intentionally out of
-scope for Phase 2B (next: Phase 2C — incident generation from evidence groups).
+for intelligence findings, and the full dashboard are designed but not
+implemented. The Phase 2C incident + risk engine is contractually specified in
+`docs/incident-risk-design.md` and ships in Phase 2C-B.

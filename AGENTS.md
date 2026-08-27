@@ -26,23 +26,26 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current phase: Phase 2B — Correlation (evidence groups)
+## Current Development Phase: Phase 2C-A — Incident & Risk Design
 
-Phase 1 (deterministic water-network simulation) is complete and audited
-(`docs/simulation.md`). Phase 2A added the signal-level module
-(`backend/app/intelligence/`: time-of-day baselines from reference data +
-bidirectional z-score anomaly detection), documented in
-`docs/anomaly_detection.md`. Phase 2B adds the correlation engine
-(`backend/app/intelligence/correlation.py`) that groups same-zone anomalies and
-citizen reports into correlated evidence groups scored by a documented
-`evidence_score` (correlation, NOT incident/risk/severity — no incident objects
-exist yet). See `docs/correlation.md`.
+Design/documentation phase. Phases 1, 2A, and 2B are complete and locked:
+simulation (`docs/simulation.md`), baseline + anomaly detection
+(`docs/anomaly_detection.md`), and correlation (`docs/correlation.md`,
+`backend/app/intelligence/correlation.py`). The Phase 2C design contract is
+documented in `docs/incident-risk-design.md`: correlated evidence groups
+become actionable incident objects with deterministic classification, risk,
+severity, and confidence.
 
-Do NOT yet build incident generation, incident classification, risk scoring,
-the AI/LLM layer, FastAPI routes for intelligence, PostgreSQL persistence of
-findings, or frontend consumption. Build incrementally; never generate the
-whole app in one step. Next (Phase 2C): incident generation from evidence
-groups.
+THIS PHASE IS DESIGN/DOCUMENTATION ONLY:
+
+- no incident implementation yet
+- no risk implementation yet
+- no AI integration yet
+
+Do not modify `backend/app/simulation/`, `backend/app/intelligence/baseline.py`,
+`detector.py`, `correlation.py`, or existing tests. Do not create incident/risk
+modules, FastAPI routes, database models, or frontend code. Next phase is
+Phase 2C-B (implement the incident + risk engine against this contract).
 
 ## Demo that must work end-to-end (priority over extras)
 

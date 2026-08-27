@@ -2,7 +2,7 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 2C-B (Incident Generation & Risk Assessment)** —
+This repository is in **Phase 3-A (AI Context & Output Contract)** —
 the Phase 0 foundation (skeleton, database connection, health endpoint,
 frontend↔backend comms), the Phase 1 deterministic water-network data
 generator, a signal-level intelligence module that scores each measurement
@@ -10,16 +10,19 @@ against a time-of-day baseline (Phase 2A), a correlation engine that groups
 same-zone anomalies + citizen reports into scored evidence groups (Phase 2B),
 and a deterministic incident + risk engine that turns strong evidence into
 actionable incidents with classification, severity, and confidence (Phase
-2C-B). See
+2C-B). Phase 3-A defines the contract between this deterministic core and the
+future AI explanation/recommendation layer (design only — no integration
+implemented yet). See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
-[`docs/correlation.md`](docs/correlation.md) and
-[`docs/incident-risk-design.md`](docs/incident-risk-design.md).
+[`docs/correlation.md`](docs/correlation.md),
+[`docs/incident-risk-design.md`](docs/incident-risk-design.md) and
+[`docs/ai-context-contract.md`](docs/ai-context-contract.md).
 
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 2C-B)
+## Architecture (Phase 3-A)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -29,9 +32,10 @@ this project.
 - **Intelligence**: `backend/app/intelligence/` — time-of-day baselines +
   bidirectional z-score anomaly detection (Phase 2A), gap-based correlation of
   anomalies + citizen reports into scored evidence groups (Phase 2B), and a
-  deterministic incident + risk engine (Phase 2C-B) that qualifies evidence
-  groups and produces `IncidentAssessment` objects (classification, risk,
-  severity, confidence). No AI/LLM layer yet.
+deterministic incident + risk engine (Phase 2C-B) that qualifies evidence
+   groups and produces `IncidentAssessment` objects (classification, risk,
+   severity, confidence). No AI/LLM layer yet — Phase 3-A only fixes the AI
+   input/output contract (`docs/ai-context-contract.md`).
 
 ```
 backend/   FastAPI app, config, db session, /health, tests
@@ -40,7 +44,8 @@ backend/   FastAPI app, config, db session, /health, tests
            app/intelligence/  baselines + anomaly detection (2A), correlation (2B),
                               incident + risk assessment (2C-B)
 frontend/  React app, API client, status view
-docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md
+docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md,
+           ai-context-contract.md
 docker-compose.yml  PostgreSQL service
 ```
 

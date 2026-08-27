@@ -26,29 +26,28 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 2C-B — Incident Generation & Risk Assessment
+## Current Development Phase: Phase 3-A — AI Context & Output Contract
 
-Incident + risk engine implemented against the Phase 2C-A design contract.
-Phases 1, 2A, 2B, and 2C-A are complete and locked: simulation
-(`docs/simulation.md`), baseline + anomaly detection (`docs/anomaly_detection.md`),
-correlation (`docs/correlation.md`, `backend/app/intelligence/correlation.py`),
-and the design contract (`docs/incident-risk-design.md`). Phase 2C-B adds
-`backend/app/intelligence/incident.py` (deterministic qualification,
-classification, risk, severity, confidence) plus tests and docs; the design
-document now records the implementation and measured calibration.
+DESIGN/DOCUMENTATION ONLY. Phases 1, 2A, 2B, 2C-A, and 2C-B are complete and
+locked. The deterministic core is verified at 82/82 tests. Phase 3-A defines
+the strict contract between the deterministic intelligence core and the future
+AI layer in `docs/ai-context-contract.md` (input context, authoritative vs
+interpretive fields, output schema, prompt strategy, provider abstraction,
+validation, fallback, security/privacy, golden example, frontend contract,
+future testing contract).
 
-THIS PHASE IS CHECKPOINTED (2C-B):
+THIS PHASE IS DESIGN/DOCUMENTATION ONLY:
 
-- determinisitic incident generation + risk assessment are implemented;
-- no AI/LLM integration yet;
-- no FastAPI routes, database models, incident persistence, or frontend
-  incident UI yet.
+- no LLM provider implementation;
+- deterministic core remains locked (simulation, baseline, detector,
+  correlation, incident — do not modify; existing tests stay untouched);
+- AI receives structured context only (never raw sensor streams);
+- AI cannot calculate or override deterministic numbers (risk, severity,
+  scores, classification, timestamps, population);
+- AI cannot control infrastructure (no valve/pump/network commands);
+- no FastAPI routes, database models, frontend AI UI, or API calls.
 
-Do not modify `backend/app/simulation/`, `backend/app/intelligence/baseline.py`,
-`detector.py`, `correlation.py`, or existing tests. Do not add LLM/Gemini
-integration, route handlers, DB models, or frontend code yet. Next phase is
-Phase 3 (AI-assisted incident explanation + recommendations) and operator
-workflow wiring for the end-to-end demo.
+Next phase is Phase 3-B (implement the AI provider behind this contract).
 
 ## Demo that must work end-to-end (priority over extras)
 

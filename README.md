@@ -2,7 +2,7 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 4-A2 (Incident Investigation View)** — the
+This repository is in **Phase 4-B1 (Read-only Telemetry API)** — the
 Phase 0 foundation (skeleton, database connection, health endpoint,
 frontend↔backend comms), the Phase 1 deterministic water-network data
 generator, a signal-level intelligence module that scores each measurement
@@ -24,18 +24,23 @@ Sentinel/NEER prototype's information architecture and dark design system,
 consuming the 3-C1 API as the single source of truth (no mock data, no
 client-side intelligence); Phase 4-A2 adds a dedicated incident investigation
 view that renders each correlated incident's deterministic evidence and AI
-analysis straight from that API response.
+analysis straight from that API response. Phase 4-B1 adds a read-only telemetry
+API (`POST /api/v1/telemetry/run` — see
+[`docs/telemetry-api.md`](docs/telemetry-api.md)) that exposes the simulator's
+already-generated time-series measurements verbatim, so a later phase can
+render real telemetry charts without any synthetic or client-side data.
 See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
 [`docs/correlation.md`](docs/correlation.md),
-[`docs/incident-risk-design.md`](docs/incident-risk-design.md) and
-[`docs/ai-context-contract.md`](docs/ai-context-contract.md).
+[`docs/incident-risk-design.md`](docs/incident-risk-design.md),
+[`docs/ai-context-contract.md`](docs/ai-context-contract.md) and
+[`docs/analysis-api.md`](docs/analysis-api.md).
 
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 4-A2)
+## Architecture (Phase 4-B1)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -63,7 +68,11 @@ deterministic incident + risk engine (Phase 2C-B) that qualifies evidence
    `AnalysisRunResponse` schema (`app/schemas/analysis.py`) via a route that
    receives its `AIOrchestrator` through dependency injection — so AI is
    optional/enhancement, deterministic fallback stays available, and there is
-   still no persistence or frontend AI UI yet.
+   still no persistence or frontend AI UI yet. Phase 4-B1 adds the read-only
+   telemetry endpoint: `TelemetryService` (`app/services/telemetry.py`), the
+   `POST /api/v1/telemetry/run` route (`app/api/routes/telemetry.py`), and the
+   `TelemetryRunResponse` schemas (`app/schemas/telemetry.py`) that export the
+   simulator's measurements verbatim (no AI, no risk/frontend charts yet).
 
 ```
 backend/   FastAPI app, config, db session, /health, tests
@@ -74,15 +83,15 @@ app/simulation/    data generator (Phase 1)
                                AI context/output models + provider interface (3-B1),
                                Gemini provider integration (3-B2),
                                orchestration + deterministic fallback (3-B3)
-           app/services/      application service layer (3-C1 analysis service)
-           app/schemas/       Pydantic API boundary schemas (health, analysis)
-           app/api/routes/    FastAPI adapters (health, analysis /run)
+           app/services/      application service layer (3-C1 analysis, 4-B1 telemetry)
+           app/schemas/       Pydantic API boundary schemas (health, analysis, telemetry)
+           app/api/routes/    FastAPI adapters (health, analysis /run, telemetry /run)
 frontend/  React app: analysis API client, operations dashboard
            (Operations / Water Network / Incidents tabs), incident investigation
            view (read-only evidence + AI analysis per incident), dark design
            system, vitest + testing-library tests
 docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md,
-           ai-context-contract.md, analysis-api.md
+           ai-context-contract.md, analysis-api.md, telemetry-api.md
 docker-compose.yml  PostgreSQL service
 ```
 
@@ -290,6 +299,29 @@ an AI explanation to each qualified incident. AI is optional/enhancement: when
 intact. See [`docs/analysis-api.md`](docs/analysis-api.md) for the full contract.
 The data source is deterministic simulation, not a live water-system feed.
 
+### 11. Telemetry API (Phase 4-B1)
+
+Start the backend (see Setup) and call `POST /api/v1/telemetry/run`:
+
+```bash
+# Golden Zone B telemetry (same inputs as the analysis golden run)
+curl -X POST http://localhost:8000/api/v1/telemetry/run \
+  -H "Content-Type: application/json" \
+  -d '{"seed":42,"days":1,"scenario":"ZONE_B_SUPPLY_INCIDENT"}'
+
+# Normal network run (no scenario)
+curl -X POST http://localhost:8000/api/v1/telemetry/run \
+  -H "Content-Type: application/json" \
+  -d '{"seed":42,"days":1}'
+```
+
+The endpoint reproduces the deterministic simulator run for the requested
+seed/days/scenario and returns the generated measurements verbatim (timestamp,
+zone_id, metric, value, unit) plus zones and scenario windows. It performs no
+anomaly detection, risk scoring, or AI, and stores nothing. This is the data
+source the next phase uses to build real telemetry charts. See
+[`docs/telemetry-api.md`](docs/telemetry-api.md) for the full contract.
+
 ## Verify
 
 - `GET http://localhost:8000/health` → `{"status":"ok"}`
@@ -297,6 +329,9 @@ The data source is deterministic simulation, not a live water-system feed.
   PostgreSQL is reachable)
 - `POST http://localhost:8000/api/v1/analysis/run` → analysis JSON (golden and
   normal runs above)
+- `POST http://localhost:8000/api/v1/telemetry/run` → telemetry JSON: 4 zones,
+  1 536 measurements/day, 15-minute cadence, authoritative units; the golden
+  scenario returns a single Zone B window `06:00–12:00Z`.
 - Frontend the "Operations dashboard" ("Network Command View"): pick a scenario
   ("Normal operation" or `ZONE_B_SUPPLY_INCIDENT`), press "Simulate Water
   Incident", and confirm the deterministic incident rows, network status pill,
@@ -315,10 +350,11 @@ PostgreSQL persistence for intelligence findings (each API run is an
 independent in-memory analysis) are designed but not implemented. The incident
 investigation view is strictly read-only: evidence, risk, and advisory AI
 recommendations only — there are no Shut/Stop/Dispatch/Isolate controls and no
-lifecycle actions in the UI. Raw telemetry
-time-series (per-zone charts, real sensor streams) is also not implemented —
-the Water Network tab and the telemetry panels are honest placeholders until a
-telemetry API phase exists.
+lifecycle actions in the UI. The telemetry API (Phase 4-B1) now exposes the
+deterministic measurement series, but frontend telemetry charts are deferred to
+the next phase — the Water Network tab and telemetry panels remain honest
+placeholders. Anomaly markers are not part of the telemetry contract yet (see
+`docs/telemetry-api.md` for the deferred overlay design).
 Incident generation, classification, risk scoring, severity, and confidence are
 implemented deterministically in Phase 2C-B (`backend/app/intelligence/incident.py`,
 tested in `backend/tests/test_incident_risk.py`); the AI context/output schemas
@@ -331,5 +367,7 @@ the orchestrator + deterministic fallback in Phase 3-B3 (`ai_orchestrator.py`,
 tested in `backend/tests/test_ai_orchestrator.py`); and the analysis API in
 Phase 3-C1 (`app/services/analysis.py`, `app/api/routes/analysis.py`,
 `app/schemas/analysis.py`, tested in `backend/tests/test_analysis_api.py` and
-`backend/tests/test_analysis_service.py`). Full regression:
-**235 passed, 1 skipped**.
+`backend/tests/test_analysis_service.py`). Phase 4-B1 adds the read-only
+telemetry API (`app/services/telemetry.py`, `app/api/routes/telemetry.py`,
+`app/schemas/telemetry.py`, tested in `backend/tests/test_telemetry_api.py`).
+Full regression: **267 passed, 1 skipped**.

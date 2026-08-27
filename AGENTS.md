@@ -26,13 +26,11 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 4-A2 — Incident Investigation View
+## Current Development Phase: Phase 4-B1 — Read-only Telemetry API
 
-Phases 3-B2, 3-B3, 3-C1, and 4-A1 are complete and locked. Phase 4-A2 extends
-the Operations dashboard so an operator can select a correlated incident and
-inspect its structured deterministic evidence and AI analysis in a dedicated
-incident investigation view — always rendered from the 3-C1 API response, never
-from mock or client-side data.
+Phases 3-B2, 3-B3, 3-C1, 4-A1, and 4-A2 are complete and locked. Phase 4-B1
+exposes the deterministic simulator's already-generated time-series
+measurements so a later phase can render real telemetry charts.
 
 Phase 4-A1 (complete, locked): redesign of the operations dashboard mirroring
 the Aqua Sentinel/NEER prototype's information architecture and dark design
@@ -45,81 +43,84 @@ the scenario id (`ZONE_B_SUPPLY_INCIDENT`, allowed only in `src/types/analysis.t
 Views: Operations ("Network Command View"), Incidents ("NEER Response Queue"),
 Water Network (honest placeholder). Test counts below.
 
-Phase 4-A2 scope (complete):
+Phase 4-A2 (complete, locked): operator selects a correlated incident from the
+Operations/Incidents queue and inspects it in a dedicated read-only
+`IncidentInvestigationView` (`frontend/src/views/IncidentInvestigationView.tsx`).
+Selection is plain `App.tsx` state (no router); "← Back to Operations" and tab
+switches clear it. Every value renders from the 3-C1 `analysis/run` response —
+deterministic `incident` record + `evidence` + `ai` attribution + `analysis`
+AI output — never from mock or client-side data. AI vs FALLBACK distinction
+reuses `AIStatusNotice`; AI fields can never overwrite deterministic values.
+`response_options` are advisory text only: no Shut/Stop/Dispatch/Isolate
+controls. `possible_causes` preserve framing; uncertainty and the persistent
+"Decision support only." notice render from the API. Presentation helpers
+(`formatConfidencePair`, `directionIndicator`) live in
+`frontend/src/lib/presentation.ts`. Fixtures in `src/test/fixtures.ts` mirror
+the verified live golden response (incident_id `INC-B-20260101T060000Z`, risk
+`91.52`, confidence `0.9918`, evidence `0.985`, diversity/coherence `1.0`,
+4 signals with `above`/`below`, 345 min, 32 000 population, 89 anomalies,
+12 reports). Frontend tests: **51 passed, 3 skipped** (skipped = live
+integration), typecheck/build pass, live integration 3/3.
 
-- **Selection.** `IncidentRow` gains an "Open investigation" affordance when an
-  `onSelect` callback is provided; the callback is threaded through
-  `IncidentQueue` → `OperationsView`/`IncidentsView` → `ViewRouter` → `App.tsx`,
-  which owns a `selectedIncidentId` state (no router, no browser-history
-  complexity). Selecting an incident swaps the main area for
-  `IncidentInvestigationView`; "← Back to Operations" clears the selection;
-  switching tabs also clears it.
-- **IncidentInvestigationView** (`frontend/src/views/IncidentInvestigationView.tsx`)
-  renders only fields from `AnalysisIncidentOut` (`incident` deterministic
-  record, `evidence`, `ai` attribution, `analysis` AI output) in sections:
-  incident header (zone_id, raw `incident_type` token, severity, status,
-  incident_id, timestamps; hierarchy "ZONE B / WATER LOSS / CRITICAL"), Risk &
-  Assessment (risk score, `confidence` as "0.9918 / 99.18%", evidence score,
-  persistence in minutes + `formatDuration`, estimated population, citizen
-  report count, sensor anomaly count, signal diversity), Contributing Signals
-  (per-signal metric, direction token + presentation glyph via
-  `directionIndicator`, anomaly_count, mean_z, mean_abs_z — direction always
-  from the API, never inferred), Correlated Evidence (authoritative sentence
-  "Multiple independent signals were observed together over time." plus
-  temporal/spatial coherence, diversity, persistence, `classification_reason`,
-  `explanation`), Citizen Reports (aggregated counts only — no locations or
-  personal details), and the Intelligence Analysis section.
-- **AI vs deterministic separation.** The analysis section is clearly
-  labeled: AI source shows "AI-assisted interpretation" + "AI Incident
-  Analysis"; FALLBACK shows "Deterministic fallback analysis" + "AI analysis
-  unavailable — deterministic analysis remains available." + `fallback_reason`
-  (reusing `AIStatusNotice`). AI fields can never overwrite deterministic
-  values (risk/severity/type/confidence come only from `incident`).
-  `response_options` are explicit **advisory** suggestions with zero button
-  controls — there are no Shut/Stop/Dispatch/Isolate actions anywhere.
-- **Uncertainty / safety.** `possible_causes` render verbatim with their
-  `framing` (possible/plausible/consistent); `investigation_actions` render as
-  "Suggested investigation" with priority + rationale (never executed);
-  `uncertainty` lists render from the API and the deterministic confidence is
-  shown as "Assessment confidence: 99.18%" with an explicit note that
-  confidence ≠ probability of a specific physical cause. A persistent,
-  unobtrusive notice reads: "Decision support only. NEER provides
-  evidence-based analysis and advisory recommendations. No infrastructure
-  action is executed by this interface."
-- **Presentation helpers.** `frontend/src/lib/presentation.ts` adds
-  `formatConfidencePair` (decimal + percent) and `directionIndicator` (glyphs
-  for the engine's `above`/`below`/`neutral` tokens only).
-- **Tests** (vitest + @testing-library/react + jsdom): **51 passed, 3 skipped**
-  (skipped = live integration; requires `NEER_LIVE_INTEGRATION=1` and a running
-  backend). Coverage includes the 4-A2 investigation scenarios (golden values,
-  4 signal rows with API directions, AI vs FALLBACK distinction, AI summary,
-  framing, suggested investigation, advisory response options, uncertainty,
-  safety notice, no infra-control buttons, no AI-overwrite, back navigation,
-  safe empty state) plus an `App.test.tsx` end-to-end selection flow.
-  `npm run typecheck` and `npm run build` pass. Live integration verified
-  against the running backend: golden dashboard, golden investigation view,
-  and normal run (all 3 pass). Fixtures in `src/test/fixtures.ts` mirror the
-  verified live golden response (incident_id `INC-B-20260101T060000Z`, risk
-  `91.52`, confidence `0.9918`, evidence `0.985`, diversity/coherence `1.0`,
-  4 signals with `above`/`below`, 345 min, 32 000 population, 89 anomalies,
-  12 reports).
-- Backend untouched this phase; backend regression baseline remains
-  **235 passed, 1 skipped**.
+Phase 4-B1 scope (complete):
 
-Explicit boundaries for Phase 4-A2:
+- **Contract.** `POST /api/v1/telemetry/run` (read-only) reproduces one
+  deterministic simulation and returns the measurements **verbatim**. Request:
+  `seed` (0..100000), `days` (>0..30), `scenario` (optional; validated against
+  the existing `SCENARIOS` registry, never duplicated). `reference_seed` is
+  intentionally NOT accepted — it only controls the separate 7-day reference
+  window used for anomaly scoring and never changes the simulated measurements.
+- **Response.** `TelemetryRunResponse` (`app/schemas/telemetry.py`):
+  `run` metadata (deterministic `telemetry-{seed}-{days}-{scenario}` run_id,
+  `data_source="deterministic-simulation"`, window_hours, zone/measurement
+  counts, ran_at), `zones` (exact `Zone` projection), `measurements` (exact
+  `Measurement` projection: timestamp, zone_id, metric, value, unit; sorted by
+  timestamp/zone/metric), `scenarios` (exact `ScenarioOutcome` projection for
+  incident-window overlays). Nothing synthetic, derived, or reconstructed.
+- **Reuse.** `TelemetryService` (`app/services/telemetry.py`) calls the existing
+  `build_config` → `run_simulation` with the same target-window inputs
+  `/analysis/run` uses — exactly one simulation code path, so telemetry for
+  (seed, days, scenario) is the same measurement series the analysis run was
+  scored against. It does NOT call `AnalysisService` (that would trigger
+  detection/correlation/risk/AI). Unknown scenario raises the shared
+  `UnknownScenarioError` (reused from the analysis service) → HTTP 422.
+- **Scope discipline.** The endpoint does simulation → serialize measurements
+  only: no anomaly detection, no risk/evidence/confidence, no classification,
+  no Gemini/orchestrator, no database, no persistence. The simulation package
+  imports neither FastAPI nor Pydantic (enforced by a test).
+- **Scale.** 15-min cadence × 4 zones × 4 metrics = 1 536 measurements/day;
+  30-day max = 46 080 rows (~4–6 MB JSON). No pagination yet (documented in
+  `docs/telemetry-api.md`).
+- **Anomaly overlay deferred.** `AnomalyResult` shares the `(zone_id, metric,
+  timestamp)` key with `Measurement` (association is unambiguous), but exposing
+  markers requires intelligence recomputation → not part of this contract.
+  Recommended future path: emit anomaly flags from the existing analysis
+  pipeline, not client-side. See `docs/telemetry-api.md`.
+- **Tests.** `backend/tests/test_telemetry_api.py` (**32 tests**): endpoint
+  registration, normal + golden runs, zones, timestamp order/cadence,
+  authoritative fields/units, exact equality with `run_simulation` output,
+  same-seed reproducibility, different-seed divergence, Zone B isolation
+  (A/C/D and out-of-window B bit-identical to the normal run; in-window
+  behavior matches the 0.50/1.25/0.60/0.85 multipliers), 422 validation
+  (unknown scenario, bad seed/days, malformed/missing body), no AI fields, no
+  database content, no FastAPI/Pydantic imports in `app/simulation`, and
+  `/analysis/run` unchanged.
+- Backend regression: **267 passed, 1 skipped** (235 locked + 32 new, 1
+  pre-existing skip). `compileall` and live golden/normal verification pass
+  (real backend: golden B pressure ≈ 2.18 bar inside vs ≈ 4.03 bar outside
+  the 06:00–12:00Z window).
 
-- No backend route/service/schema/intelligence changes; no DB writes; no
-  auth; no WebSockets/SSE/streaming.
-- No mock incident data and no client-side intelligence: every value in the
-  investigation view comes from the `analysis/run` response; no hardcoded
-  golden numbers and no invented risk factors (the API has no per-factor
-  breakdown — never recreate evidence/severity weights in React).
-- No infrastructure controls: investigation is read-only evidence + advisory
-  recommendations; operator lifecycle actions (assign/resolve) remain a later
-  phase.
-- No routing library; selection is plain component state so the header tabs
-  and back affordance always behave predictably.
-- Each analysis request is an independent in-memory run (3-C1 contract).
+Explicit boundaries for Phase 4-B1:
+
+- No changes to simulation generator/engine, anomaly detector, correlation
+  engine, incident assessor, AI provider, or AI orchestrator semantics.
+- No intelligence recomputation in the telemetry endpoint; no risk/anomaly/AI
+  fields.
+- No persistence; no database; each request is an independent deterministic run.
+- No frontend changes: charts, telemetry widgets, and dashboard UI are deferred
+  to Phase 4-B2. Do not begin frontend chart implementation yet.
+- No commit for this phase's work (previous phases are locked at their
+  checkpoints).
 
 ## Demo that must work end-to-end (priority over extras)
 

@@ -26,10 +26,17 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current phase: Phase 0 — Foundation
+## Current phase: Phase 2A — Baseline + Anomaly Detection
 
-Do NOT build the full product yet. Establish first: repo structure, backend/frontend skeletons, PostgreSQL connection, config management, health endpoint, basic frontend↔backend comms, Docker dev env, testing foundation.
-Build incrementally; never generate the whole app in one step. After Phase 0 is stable, move to the simulation layer.
+Phase 1 (deterministic water-network simulation) is complete and audited, and
+is documented in `docs/simulation.md`. Phase 2A adds the signal-level
+intelligence module under `backend/app/intelligence/` (time-of-day baselines
+from reference data + bidrectional z-score anomaly detection), documented in
+`docs/anomaly_detection.md`. Do NOT yet build signal correlation, incident
+generation, incident classification, risk scoring, the AI/LLM layer, FastAPI
+routes for intelligence, PostgreSQL persistence of findings, or frontend
+consumption. Build incrementally; never generate the whole app in one step.
+After Phase 2A is stable, move to correlation + incident generation.
 
 ## Demo that must work end-to-end (priority over extras)
 

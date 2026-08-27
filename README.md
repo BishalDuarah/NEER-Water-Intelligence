@@ -2,8 +2,8 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 3-C1 (Backend Analysis API)** —
-the Phase 0 foundation (skeleton, database connection, health endpoint,
+This repository is in **Phase 4-A1 (Frontend Operations Dashboard)** — the
+Phase 0 foundation (skeleton, database connection, health endpoint,
 frontend↔backend comms), the Phase 1 deterministic water-network data
 generator, a signal-level intelligence module that scores each measurement
 against a time-of-day baseline (Phase 2A), a correlation engine that groups
@@ -18,7 +18,11 @@ locally, opt-in live test); Phase 3-B3 adds the orchestrator that gates AI
 consumption and fails safely onto a deterministic analysis
 (`ai_orchestrator.py`: `AIOrchestrator`, deterministic `build_fallback_analysis`);
 Phase 3-C1 exposes all of that through a small FastAPI analysis endpoint
-(`POST /api/v1/analysis/run` — see [`docs/analysis-api.md`](docs/analysis-api.md)).
+(`POST /api/v1/analysis/run` — see [`docs/analysis-api.md`](docs/analysis-api.md));
+Phase 4-A1 builds the operations dashboard that closely reproduces the Aqua
+Sentinel/NEER prototype's information architecture and dark design system,
+consuming the 3-C1 API as the single source of truth (no mock data, no
+client-side intelligence).
 See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
@@ -29,7 +33,7 @@ See
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 3-C1)
+## Architecture (Phase 4-A1)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -71,7 +75,9 @@ app/simulation/    data generator (Phase 1)
            app/services/      application service layer (3-C1 analysis service)
            app/schemas/       Pydantic API boundary schemas (health, analysis)
            app/api/routes/    FastAPI adapters (health, analysis /run)
-frontend/  React app, API client, status view
+frontend/  React app: analysis API client, operations dashboard
+           (Operations / Water Network / Incidents tabs), dark design system,
+           vitest + testing-library tests
 docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md,
            ai-context-contract.md, analysis-api.md
 docker-compose.yml  PostgreSQL service
@@ -128,7 +134,21 @@ npm run dev
 ```
 
 The app is served at http://localhost:5173 and calls the backend
-`GET /api/v1/health` endpoint.
+`POST /api/v1/analysis/run` endpoint (see
+[`docs/analysis-api.md`](docs/analysis-api.md)). The Operations dashboard
+("Network Command View") includes the Incident Simulation Engine (scenario
+toggle + run), the 5-stat network summary, Zone Health Overview, Active
+Incidents queue, and Citizen Reports. `VITE_API_BASE_URL` defaults to
+`http://localhost:8000`; the backend CORS allows `http://localhost:5173`.
+
+Run the frontend tests:
+
+```bash
+npm test
+```
+
+The two live-integration tests are skipped unless `NEER_LIVE_INTEGRATION=1`
+and a backend is running on port 8000.
 
 ### 4. Run the simulator (Phase 1)
 
@@ -269,14 +289,20 @@ The data source is deterministic simulation, not a live water-system feed.
   PostgreSQL is reachable)
 - `POST http://localhost:8000/api/v1/analysis/run` → analysis JSON (golden and
   normal runs above)
-- Frontend status view shows backend health, including DB connectivity.
+- Frontend the "Operations dashboard" ("Network Command View"): pick a scenario
+  ("Normal operation" or `ZONE_B_SUPPLY_INCIDENT`), press "Simulate Water
+  Incident", and confirm the deterministic incident rows, network status pill,
+  zone health, incident queue, and citizen reports render from the API response.
 - `python -m app.simulation` produces reproducible measurement output.
 
 ## What is NOT implemented yet
 
-Operator workflows / incident lifecycle management, PostgreSQL persistence for
-intelligence findings (each API run is an independent in-memory analysis), and
-the full dashboard / frontend analysis view are designed but not implemented.
+Operator workflows / incident lifecycle management (assign → resolve) and
+PostgreSQL persistence for intelligence findings (each API run is an
+independent in-memory analysis) are designed but not implemented. Raw telemetry
+time-series (per-zone charts, real sensor streams) is also not implemented —
+the Water Network tab and the telemetry panels are honest placeholders until a
+telemetry API phase exists.
 Incident generation, classification, risk scoring, severity, and confidence are
 implemented deterministically in Phase 2C-B (`backend/app/intelligence/incident.py`,
 tested in `backend/tests/test_incident_risk.py`); the AI context/output schemas

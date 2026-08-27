@@ -26,53 +26,58 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 3-C1 — Backend Analysis API
+## Current Development Phase: Phase 4-A1 — Frontend Operations Dashboard
 
-Phase 3-B2 (concrete Gemini provider) and Phase 3-B3 (orchestration + safe
-fallback) are complete and locked. Phase 3-C1 exposes the deterministic
-intelligence pipeline + AI orchestration through a small FastAPI API.
+Phases 3-B2, 3-B3, and 3-C1 are complete and locked. Phase 4-A1 builds and
+redesigns the frontend to closely reproduce the delivered Aqua Sentinel/NEER
+prototype's information architecture and dark visual design system
+(https://aqua-sentinel-eosin.vercel.app/), while keeping the 3-C1 API as the
+single source of truth.
 
-Phase 3-C1 scope (complete):
+Phase 4-A1 scope (complete):
 
-- `POST /api/v1/analysis/run` (`backend/app/api/routes/analysis.py`) — a
-  versioned adapter endpoint; the route stays thin and delegates to the service
-  layer. FastAPI is an adapter: no business/anomaly/AI fallback logic lives in
-  routes, and none of the intelligence modules import FastAPI.
-- Application service `backend/app/services/analysis.py` (`AnalysisService`)
-  — orchestrates the existing locked modules (simulation → anomaly detection →
-  correlation → incident/risk → `build_ai_context` → `AIOrchestrator`) and maps
-  the result onto compact Pydantic response schemas
-  (`backend/app/schemas/analysis.py`). Reuses `SCENARIOS`; the reference window
-  is a fixed 7-day baseline (`REFERENCE_WINDOW_DAYS`) matching the locked test
-  convention.
-- Dependency injection: the route depends on `AnalysisService`, which receives
-  `AIOrchestrator` via `Depends(get_orchestrator)`. Tests override
-  `get_orchestrator` with stub providers — no live Gemini, no credentials, no
-  database, no network needed for API tests.
-- AI failure degrades, never hides the incident: without `GEMINI_API_KEY` the
-  endpoint returns HTTP 200 with `ai.source="FALLBACK"` and the deterministic
-  incident/risk/severity/evidence intact. Known input errors map to 422;
-  unexpected errors surface as HTTP 500 without leaking stack traces/secrets.
-- Demo works end-to-end via the API: golden `{seed:42, days:1,
-  scenario:"ZONE_B_SUPPLY_INCIDENT"}` → one `WATER_LOSS`/`CRITICAL` incident
-  (risk ≈ 91.52, confidence ≈ 0.9918, evidence ≈ 0.985, population 32 000),
-  and a normal run (`seed:42` only) → HTTP 200 with zero incidents.
+- **No mock incident data and no client-side intelligence.** The React app
+  (`frontend/`) never hardcodes incidents, risk, severity, or evidence; it calls
+  `POST /api/v1/analysis/run` via `frontend/src/api/analysis.ts` and renders
+  what the backend returns. Golden values, risk weights, and the scenario id
+  are guarded by `src/test/source-integrity.test.ts` (scenario id only in
+  `src/types/analysis.ts`).
+- **Design system** mirrors the prototype: IBM Plex Sans/Mono, dark navy
+  oklch token palette in `tailwind.config.js` (with `<alpha-value>` for opacity
+  utilities), `.panel`/`.label-mono`/`.chip` component classes in
+  `src/index.css`.
+- **Information architecture** matches the prototype: sticky header with NEER
+  branding + Demo/Simulation Mode badge, nav tabs (Operations / Water Network /
+  Incidents). Operations = "Network Command View" with 5-stat summary,
+  Zone Health Overview, Active Incidents queue, and Citizen Reports panels.
+  Incidents = "NEER Response Queue". Water Network = honest later-phase
+  placeholder (no telemetry endpoints exist yet).
+- **Simulation engine** ("Simulate Water Incident") is the real demo control:
+  scenario toggle (Normal operation / `ZONE_B_SUPPLY_INCIDENT`) → `runAnalysis`
+  → renders deterministic incident rows (risk, confidence, evidence,
+  persistence, impact, anomalies, contributing signals) + AI status chip
+  (AI available / deterministic fallback with reason).
+- Views: `OperationsView`, `IncidentsView`, `NetworkView` selected by
+  `ViewRouter`; `App.tsx` owns tab state + `useAnalysis`. Retry re-runs the
+  last submitted request. Severity tones: NORMAL/LOW→ok, MEDIUM→warn,
+  HIGH/CRITICAL→destructive.
+- Tests (vitest + @testing-library/react + jsdom): **33 passed, 2 skipped**
+  (skipped = live integration, requires `NEER_LIVE_INTEGRATION=1` and a running
+  backend). `npm run typecheck` and `npm run build` pass; live integration
+  verified against the running backend (golden + normal).
+- Backend untouched this phase; backend regression baseline remains
+  **235 passed, 1 skipped**.
 
-Explicit boundaries for this phase:
+Explicit boundaries for Phase 4-A1:
 
-- deterministic algorithms are unchanged;
-- no frontend changes, no database persistence, no PostgreSQL models, no
-  migrations, no auth, no background jobs, no WebSockets, no streaming;
-- no new AI providers, no RAG, no vector DBs, no queues, no notifications;
-- no autonomous/infrastructure control — always decision support;
-- each request is an independent in-memory analysis run.
-
-Do not modify `backend/app/simulation/`, `backend/app/intelligence/baseline.py`,
-`detector.py`, `correlation.py`, `incident.py`, `ai_context.py`,
-`ai_analysis.py`, `ai_provider.py`, `gemini_provider.py`, or existing tests.
-Full regression: **235 passed, 1 skipped** (`tests/` including
-`test_analysis_api.py` and `test_analysis_service.py`). Next phase (e.g.
-operator workflow / persistence / frontend analysis view) has NOT been started.
+- No backend route/service/schema/intelligence changes; no DB writes; no
+  auth; no WebSockets/SSE/streaming on the frontend.
+- No mock/chart data: telemetry time-series visualization and per-zone charts
+  are honest placeholders until a telemetry API phase exists.
+- No zone names invented: only zones A–D (from `KNOWN_ZONES`) with status
+  derived from API incidents; prototype demo sensor counts (42/38/19) are not
+  reproduced because the API has no sensor registry.
+- Each analysis request is an independent in-memory run (3-C1 contract).
 
 ## Demo that must work end-to-end (priority over extras)
 

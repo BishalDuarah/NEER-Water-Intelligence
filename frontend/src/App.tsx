@@ -1,17 +1,21 @@
-import { StatusView } from "./views/StatusView";
+import { useState } from "react";
+import { AppShell } from "./components/AppShell";
+import type { AppTab } from "./components/AppShell";
+import { BackendStatusPill } from "./components/BackendStatusPill";
+import { useAnalysis } from "./hooks/useAnalysis";
+import { ViewRouter } from "./views/ViewRouter";
 
 export default function App() {
+  const { state, run } = useAnalysis();
+  const [tab, setTab] = useState<AppTab>("operations");
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
-        <h1 className="text-lg font-semibold">NEER — Water Intelligence</h1>
-        <p className="text-sm text-slate-500">
-          Decision-support dashboard (Phase 0)
-        </p>
-      </header>
-      <main className="mx-auto max-w-3xl px-6 py-8">
-        <StatusView />
-      </main>
-    </div>
+    <AppShell
+      activeTab={tab}
+      onNavigate={setTab}
+      footer={<BackendStatusPill />}
+    >
+      <ViewRouter tab={tab} state={state} onRun={run} />
+    </AppShell>
   );
 }

@@ -1,3 +1,45 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .panel {
+    background: linear-gradient(160deg, oklch(22% 0.04 246), oklch(17% 0.03 244));
+    border: 1px solid oklch(33% 0.035 244);
+    border-radius: 0.5rem;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06),
+      0 18px 40px -24px oklch(10% 0.04 245 / 0.9);
+  }
+
+  .label-mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: oklch(72% 0.026 232);
+    font-size: 0.68rem;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid;
+    padding: 0.25rem 0.625rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+}

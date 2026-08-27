@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.analysis import analysis_router
 from app.api.routes.health import root_router, v1_router
 from app.config import get_settings
 
@@ -18,3 +19,4 @@ app.add_middleware(
 
 app.include_router(root_router)
 app.include_router(v1_router, prefix=settings.api_v1_prefix)
+app.include_router(analysis_router, prefix=settings.api_v1_prefix)

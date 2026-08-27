@@ -2,7 +2,7 @@
 
 Decision-support platform that turns simulated water-system data into early
 incident detection, risk intelligence, and response recommendations.
-This repository is in **Phase 3-B3 (AI Orchestration & Fallback)** —
+This repository is in **Phase 3-C1 (Backend Analysis API)** —
 the Phase 0 foundation (skeleton, database connection, health endpoint,
 frontend↔backend comms), the Phase 1 deterministic water-network data
 generator, a signal-level intelligence module that scores each measurement
@@ -16,7 +16,9 @@ interface; Phase 3-B2 adds the concrete Gemini provider behind that interface
 (`gemini_provider.py`, `google-genai` SDK, structured output re-validated
 locally, opt-in live test); Phase 3-B3 adds the orchestrator that gates AI
 consumption and fails safely onto a deterministic analysis
-(`ai_orchestrator.py`: `AIOrchestrator`, deterministic `build_fallback_analysis`).
+(`ai_orchestrator.py`: `AIOrchestrator`, deterministic `build_fallback_analysis`);
+Phase 3-C1 exposes all of that through a small FastAPI analysis endpoint
+(`POST /api/v1/analysis/run` — see [`docs/analysis-api.md`](docs/analysis-api.md)).
 See
 [`docs/simulation.md`](docs/simulation.md),
 [`docs/anomaly_detection.md`](docs/anomaly_detection.md),
@@ -27,7 +29,7 @@ See
 See `AGENTS.md` for architecture rules and the hard constraints that govern
 this project.
 
-## Architecture (Phase 3-B3)
+## Architecture (Phase 3-C1)
 
 - **Backend**: Python + FastAPI, SQLAlchemy, Pydantic, PostgreSQL
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS
@@ -49,8 +51,13 @@ deterministic incident + risk engine (Phase 2C-B) that qualifies evidence
    Phase 3-B3 adds the orchestration gate (`ai_orchestrator.py`): one provider
    attempt per incident via `AIOrchestrator.analyze`, and any `AIProviderError`
    falls back to the deterministic `build_fallback_analysis` (safe categorized
-   `fallback_reason`, incident preserved, no retries). No routes, persistence,
-   or frontend AI UI yet.
+   `fallback_reason`, incident preserved, no retries). Phase 3-C1 adds the
+   analysis API: `AnalysisService` (`app/services/analysis.py`) runs the
+   pipeline for `POST /api/v1/analysis/run`, mapping results onto the compact
+   `AnalysisRunResponse` schema (`app/schemas/analysis.py`) via a route that
+   receives its `AIOrchestrator` through dependency injection — so AI is
+   optional/enhancement, deterministic fallback stays available, and there is
+   still no persistence or frontend AI UI yet.
 
 ```
 backend/   FastAPI app, config, db session, /health, tests
@@ -61,9 +68,12 @@ app/simulation/    data generator (Phase 1)
                                AI context/output models + provider interface (3-B1),
                                Gemini provider integration (3-B2),
                                orchestration + deterministic fallback (3-B3)
+           app/services/      application service layer (3-C1 analysis service)
+           app/schemas/       Pydantic API boundary schemas (health, analysis)
+           app/api/routes/    FastAPI adapters (health, analysis /run)
 frontend/  React app, API client, status view
 docs/      simulation.md, anomaly_detection.md, correlation.md, incident-risk-design.md,
-           ai-context-contract.md
+           ai-context-contract.md, analysis-api.md
 docker-compose.yml  PostgreSQL service
 ```
 
@@ -229,27 +239,55 @@ print(result.source.value)      # "AI" (Gemini) or "FALLBACK" (deterministic)
 print(result.analysis.summary)  # always a valid AIIncidentAnalysis
 ```
 
+### 10. Analysis API (Phase 3-C1)
+
+Start the backend (see Setup) and call `POST /api/v1/analysis/run`:
+
+```bash
+# Golden Zone B incident
+curl -X POST http://localhost:8000/api/v1/analysis/run \
+  -H "Content-Type: application/json" \
+  -d '{"seed":42,"days":1,"scenario":"ZONE_B_SUPPLY_INCIDENT"}'
+
+# Normal network run (no scenario)
+curl -X POST http://localhost:8000/api/v1/analysis/run \
+  -H "Content-Type: application/json" \
+  -d '{"seed":42,"days":1}'
+```
+
+The API runs the deterministic simulation + intelligence pipeline and attaches
+an AI explanation to each qualified incident. AI is optional/enhancement: when
+`GEMINI_API_KEY` is absent the endpoint still returns HTTP 200 with
+`ai.source="FALLBACK"` and the deterministic incident/risk/severity/evidence
+intact. See [`docs/analysis-api.md`](docs/analysis-api.md) for the full contract.
+The data source is deterministic simulation, not a live water-system feed.
+
 ## Verify
 
 - `GET http://localhost:8000/health` → `{"status":"ok"}`
 - `GET http://localhost:8000/api/v1/health` → structured status (DB `ok` when
   PostgreSQL is reachable)
+- `POST http://localhost:8000/api/v1/analysis/run` → analysis JSON (golden and
+  normal runs above)
 - Frontend status view shows backend health, including DB connectivity.
 - `python -m app.simulation` produces reproducible measurement output.
 
 ## What is NOT implemented yet
 
-Incident lifecycle management / operator workflows, FastAPI routes / PostgreSQL
-persistence for intelligence findings, and the full dashboard are designed but
-not implemented. Incident generation, classification, risk scoring, severity,
-and confidence are implemented deterministically in Phase 2C-B
-(`backend/app/intelligence/incident.py`, tested in
-`backend/tests/test_incident_risk.py`); the AI context/output schemas and
-provider interface are implemented in Phase 3-B1 (`ai_context.py`,
+Operator workflows / incident lifecycle management, PostgreSQL persistence for
+intelligence findings (each API run is an independent in-memory analysis), and
+the full dashboard / frontend analysis view are designed but not implemented.
+Incident generation, classification, risk scoring, severity, and confidence are
+implemented deterministically in Phase 2C-B (`backend/app/intelligence/incident.py`,
+tested in `backend/tests/test_incident_risk.py`); the AI context/output schemas
+and provider interface are implemented in Phase 3-B1 (`ai_context.py`,
 `ai_analysis.py`, `ai_provider.py`, tested in
 `backend/tests/test_ai_context_contract.py`); the concrete Gemini provider in
 Phase 3-B2 (`gemini_provider.py`, network-free fake-client tests in
-`backend/tests/test_gemini_provider.py` plus an opt-in live Gemini test); and
+`backend/tests/test_gemini_provider.py` plus an opt-in live Gemini test);
 the orchestrator + deterministic fallback in Phase 3-B3 (`ai_orchestrator.py`,
-tested in `backend/tests/test_ai_orchestrator.py`). Full regression:
-**193 passed, 1 skipped**.
+tested in `backend/tests/test_ai_orchestrator.py`); and the analysis API in
+Phase 3-C1 (`app/services/analysis.py`, `app/api/routes/analysis.py`,
+`app/schemas/analysis.py`, tested in `backend/tests/test_analysis_api.py` and
+`backend/tests/test_analysis_service.py`). Full regression:
+**235 passed, 1 skipped**.

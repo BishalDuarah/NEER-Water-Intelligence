@@ -26,57 +26,53 @@ Decision-support platform: detect/correlate/assess/recommend on simulated water 
 - Type hints everywhere; handle errors explicitly.
 - Maintain tests for intelligence calculations and critical API behavior.
 
-## Current Development Phase: Phase 3-B3 — AI Orchestration & Deterministic Fallback
+## Current Development Phase: Phase 3-C1 — Backend Analysis API
 
 Phase 3-B2 (concrete Gemini provider) and Phase 3-B3 (orchestration + safe
-fallback) are complete.
+fallback) are complete and locked. Phase 3-C1 exposes the deterministic
+intelligence pipeline + AI orchestration through a small FastAPI API.
 
-Phase 3-B2 implemented the concrete LLM provider behind the Phase 3-A/3-B1 AI
-contract: `backend/app/intelligence/gemini_provider.py` (`GeminiProvider` +
-`GeminiProviderConfig` + deterministic `SYSTEM_INSTRUCTIONS`) using the current
-`google-genai` Python SDK — ONE `IncidentAIContext` in, ONE validated
-`AIIncidentAnalysis` out via a single structured-output call (system
-instructions + `serialize_context()` + Pydantic JSON schema), with failures
-mapped onto the `AIProviderError` hierarchy.
+Phase 3-C1 scope (complete):
 
-Phase 3-B3 added `backend/app/intelligence/ai_orchestrator.py`
-(`AIOrchestrator` + `AnalysisResult` + `AnalysisSource` + `FallbackReason` +
-deterministic `build_fallback_analysis` + `analyze_incident`). It is the single
-gate NEER uses to consume LLM output: one provider attempt per incident, and any
-`AIProviderError` subclass falls back to a fully deterministic `AIIncidentAnalysis`
-built only from the context (categorized safe `fallback_reason`, never raw
-exception text). Deterministic core (Phases 1–2C-B) remains locked and
-authoritative; provider failures never make an incident disappear.
+- `POST /api/v1/analysis/run` (`backend/app/api/routes/analysis.py`) — a
+  versioned adapter endpoint; the route stays thin and delegates to the service
+  layer. FastAPI is an adapter: no business/anomaly/AI fallback logic lives in
+  routes, and none of the intelligence modules import FastAPI.
+- Application service `backend/app/services/analysis.py` (`AnalysisService`)
+  — orchestrates the existing locked modules (simulation → anomaly detection →
+  correlation → incident/risk → `build_ai_context` → `AIOrchestrator`) and maps
+  the result onto compact Pydantic response schemas
+  (`backend/app/schemas/analysis.py`). Reuses `SCENARIOS`; the reference window
+  is a fixed 7-day baseline (`REFERENCE_WINDOW_DAYS`) matching the locked test
+  convention.
+- Dependency injection: the route depends on `AnalysisService`, which receives
+  `AIOrchestrator` via `Depends(get_orchestrator)`. Tests override
+  `get_orchestrator` with stub providers — no live Gemini, no credentials, no
+  database, no network needed for API tests.
+- AI failure degrades, never hides the incident: without `GEMINI_API_KEY` the
+  endpoint returns HTTP 200 with `ai.source="FALLBACK"` and the deterministic
+  incident/risk/severity/evidence intact. Known input errors map to 422;
+  unexpected errors surface as HTTP 500 without leaking stack traces/secrets.
+- Demo works end-to-end via the API: golden `{seed:42, days:1,
+  scenario:"ZONE_B_SUPPLY_INCIDENT"}` → one `WATER_LOSS`/`CRITICAL` incident
+  (risk ≈ 91.52, confidence ≈ 0.9918, evidence ≈ 0.985, population 32 000),
+  and a normal run (`seed:42` only) → HTTP 200 with zero incidents.
 
-Explicit boundaries for the 3-B3 phase:
+Explicit boundaries for this phase:
 
-- `AIOrchestrator.analyze(context)` returns one `AnalysisResult`
-  (`incident_id`, `source=AI|FALLBACK`, `analysis`, `ai_available`,
-  `fallback_reason`); success passes the provider's validated analysis through
-  unchanged; only `AIProviderError` subclasses trigger a fallback — unexpected
-  errors propagate to the caller;
-- `build_fallback_analysis` is pure/deterministic: no clocks, no randomness, no
-  network, no invented signals — only values already present in the context;
-  identical contexts produce byte-identical analyses, across failure modes too;
-- no retry loops, no fallback chaining, no new providers; the default provider
-  (Gemini) is built lazily, so a missing `GEMINI_API_KEY` is a deterministic
-  `PROVIDER_UNAVAILABLE` fallback, never an import error;
-- deterministic values are never recomputed or overridden; fallback worded as
-  qualified/advisory (possible/consistent, verify/inspect/compare, advisory-only
-  response options, explicit uncertainty, decision-support safety notes);
-- API key handling unchanged (env or injected config; never logged/committed);
-- unit tests are network-free (injected stub providers); the live Gemini
-  integration test stays opt-in (`NEER_RUN_LIVE_GEMINI_TEST=1` +
-  `GEMINI_API_KEY`) and skipped otherwise;
-- still no FastAPI routes, no database models, no frontend AI UI, no any
-  autonomous control action.
+- deterministic algorithms are unchanged;
+- no frontend changes, no database persistence, no PostgreSQL models, no
+  migrations, no auth, no background jobs, no WebSockets, no streaming;
+- no new AI providers, no RAG, no vector DBs, no queues, no notifications;
+- no autonomous/infrastructure control — always decision support;
+- each request is an independent in-memory analysis run.
 
 Do not modify `backend/app/simulation/`, `backend/app/intelligence/baseline.py`,
 `detector.py`, `correlation.py`, `incident.py`, `ai_context.py`,
 `ai_analysis.py`, `ai_provider.py`, `gemini_provider.py`, or existing tests.
-Full regression: **193 passed, 1 skipped** (`tests/` including
-`test_ai_orchestrator.py`). Next phase (Phase 3-C) — operator/API/UI
-integration — has NOT been started.
+Full regression: **235 passed, 1 skipped** (`tests/` including
+`test_analysis_api.py` and `test_analysis_service.py`). Next phase (e.g.
+operator workflow / persistence / frontend analysis view) has NOT been started.
 
 ## Demo that must work end-to-end (priority over extras)
 

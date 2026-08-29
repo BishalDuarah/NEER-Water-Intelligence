@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { AnalysisRunRequest } from "../types/analysis";
 import type { AnalysisState } from "../hooks/useAnalysis";
 import { buildZoneRows } from "../lib/zones";
@@ -20,9 +20,11 @@ interface OperationsViewProps {
 
 export function OperationsView({ state, onRun, onSelectIncident }: OperationsViewProps) {
   const lastRequestRef = useRef<AnalysisRunRequest | null>(null);
+  const [activeScenario, setActiveScenario] = useState<string | null>(null);
 
   const handleRun = (request: AnalysisRunRequest) => {
     lastRequestRef.current = request;
+    setActiveScenario(request.scenario ?? null);
     onRun(request);
   };
 
@@ -120,7 +122,7 @@ export function OperationsView({ state, onRun, onSelectIncident }: OperationsVie
             aria-label="Zone monitoring"
           >
             <div className="lg:col-span-2">
-              <TelemetryPanel />
+              <TelemetryPanel scenario={activeScenario} />
             </div>
             <ZoneHealthPanel zones={buildZoneRows(state.result)} />
           </section>

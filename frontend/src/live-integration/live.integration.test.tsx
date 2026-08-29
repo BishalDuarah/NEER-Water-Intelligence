@@ -2,6 +2,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { runAnalysis } from "../api/analysis";
+import { runTelemetry } from "../api/telemetry";
+import { TelemetryChart } from "../components/telemetry/TelemetryChart";
 import { OperationsView } from "../views/OperationsView";
 import { IncidentInvestigationView } from "../views/IncidentInvestigationView";
 import type { AnalysisState } from "../hooks/useAnalysis";
@@ -90,5 +92,64 @@ run("live backend integration (requires NEER_LIVE_INTEGRATION=1)", () => {
     );
     expect(html).toContain("Network Status: Stable");
     expect(html).toContain("No active incidents. Network signals nominal across all monitored zones.");
+  }, 30000);
+
+  it("fetches real golden telemetry matching the analysis scenario", async () => {
+    const telemetry = await runTelemetry({
+      seed: 42,
+      days: 1,
+      scenario: "ZONE_B_SUPPLY_INCIDENT",
+    });
+
+    expect(telemetry.run.data_source).toBe("deterministic-simulation");
+    expect(telemetry.zones).toHaveLength(4);
+    expect(telemetry.scenarios).toHaveLength(1);
+    const scenario = telemetry.scenarios[0];
+    expect(scenario.zone_id).toBe("B");
+    expect(scenario.window_start).toBe("2026-01-01T06:00:00Z");
+    expect(scenario.window_end).toBe("2026-01-01T12:00:00Z");
+
+    const measurements = telemetry.measurements;
+    expect(measurements.length).toBeGreaterThan(0);
+    // one day at 15-min cadence across 4 zones and 4 metrics
+    expect(measurements.length).toBe(96 * 4 * 4);
+    const units = new Set(measurements.map((m) => m.unit));
+    expect(units).toEqual(new Set(["m3/h", "bar", "mg/L"]));
+    // no reference_seed reaches the backend payload
+    // (the TS type forbids sending it, verified by the client test)
+  }, 30000);
+
+  it("renders real backend measurements in the SVG chart with the incident window", async () => {
+    const telemetry = await runTelemetry({
+      seed: 42,
+      days: 1,
+      scenario: "ZONE_B_SUPPLY_INCIDENT",
+    });
+    const scenario = telemetry.scenarios[0];
+
+    const html = renderToStaticMarkup(
+      <TelemetryChart
+        measurements={telemetry.measurements}
+        metric="pressure"
+        unit="bar"
+        windowStart={scenario.window_start}
+        windowEnd={scenario.window_end}
+        label="Zone B — Pressure"
+      />,
+    );
+
+    const pressure = telemetry.measurements.filter(
+      (m) => m.zone_id === "B" && m.metric === "pressure",
+    );
+    const before = pressure.find((m) => m.timestamp === "2026-01-01T05:45:00Z");
+    const inside = pressure.find((m) => m.timestamp === "2026-01-01T06:30:00Z");
+    expect(before).toBeDefined();
+    expect(inside).toBeDefined();
+    if (before && inside) {
+      expect(inside.value).toBeLessThan(before.value);
+    }
+
+    expect(html).toContain("<polyline");
+    expect(html).toContain("Incident window");
   }, 30000);
 });

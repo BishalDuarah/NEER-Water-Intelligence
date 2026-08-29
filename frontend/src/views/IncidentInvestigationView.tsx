@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AIStatusNotice } from "../components/AIStatusNotice";
 import { SeverityChip } from "../components/SeverityChip";
 import { ArrowRightIcon } from "../components/icons";
+import { IncidentTelemetrySection } from "../components/telemetry/IncidentTelemetrySection";
 import {
   directionIndicator,
   formatConfidencePair,
@@ -10,11 +11,16 @@ import {
   formatPopulation,
   formatRisk,
 } from "../lib/presentation";
-import type { AnalysisIncidentOut, PossibleCause } from "../types/analysis";
+import type {
+  AnalysisIncidentOut,
+  AnalysisRunMetadata,
+  PossibleCause,
+} from "../types/analysis";
 
 interface IncidentInvestigationViewProps {
   incident: AnalysisIncidentOut | null;
   onBack: () => void;
+  run?: AnalysisRunMetadata | null;
 }
 
 function PanelHeader({
@@ -114,6 +120,7 @@ function PossibleCauseCard({ cause }: { cause: PossibleCause }) {
 export function IncidentInvestigationView({
   incident,
   onBack,
+  run = null,
 }: IncidentInvestigationViewProps) {
   if (incident === null) {
     return (
@@ -190,6 +197,15 @@ export function IncidentInvestigationView({
           />
         </div>
       </section>
+
+      {run !== null && (
+        <IncidentTelemetrySection
+          zoneId={record.zone_id}
+          seed={run.seed}
+          days={run.days}
+          scenario={run.scenario}
+        />
+      )}
 
       <section
         className="panel p-5"

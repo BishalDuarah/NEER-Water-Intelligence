@@ -36,6 +36,7 @@ export default function App() {
         <IncidentInvestigationView
           incident={selectedIncident}
           onBack={() => setSelectedIncidentId(null)}
+          run={state.status === "success" ? state.result.run : null}
         />
       ) : (
         <ViewRouter
